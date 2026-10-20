@@ -1,0 +1,33 @@
+OBP hang: guard find-child-device against a child with no "reg".
+
+md-iodevice-props.fth's find-child-device reads each PCI child's "reg" with an
+unconditional drop after get-package-property. A child with no "reg" makes that
+drop eat the phandle, and the sibling walk then runs off into garbage -- OBP
+hangs before its banner. Check the flag instead: no "reg" just means not a
+match, keep walking.
+
+This is what lets the stand-init "pci-network" branch (which stamps a per-NIC
+local-mac-address from the MD) run on QEMU's flat PCIe bus, where a real
+T2000's deep switch tree is not there to keep the walk short. Build-tree only,
+never src/obp.
+
+--- a/obp/arch/sun4v/md-iodevice-props.fth
++++ b/obp/arch/sun4v/md-iodevice-props.fth
+@@ -121,10 +121,13 @@
+    child dup if						( dev fcn phandle )
+       begin						( dev fcn phandle )
+          dup if						( dev fcn phandle )
+-            dup " reg" rot get-package-property drop	( dev fcn phandle reg,len )
+-            decode-int nip nip				( dev fcn phandle phys.hi )
+-            2over rot					( dev fcn phandle dev fcn phys.hi )
+-            tuck cfg>fcn# = -rot cfg>dev# = and 0=	( dev fcn phandle flag )
++            dup " reg" rot get-package-property if	( dev fcn phandle )
++               true				\ no "reg" on this child: not a match, keep walking
++            else					( dev fcn phandle reg,len )
++               decode-int nip nip			( dev fcn phandle phys.hi )
++               2over rot				( dev fcn phandle dev fcn phys.hi )
++               tuck cfg>fcn# = -rot cfg>dev# = and 0=	( dev fcn phandle flag )
++            then					( dev fcn phandle flag )
+          else						( dev fcn phandle )
+             false					( dev fcn phandle flag )
+          then						( dev fcn phandle )

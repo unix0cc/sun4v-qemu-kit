@@ -1,0 +1,96 @@
+tests/full/md -- the machine-description gate
+=============================================
+
+    make md-verify              the same as tests/full/md/run
+                                (make md-verify-reference adds the Sun
+                                comparison)
+    tests/full/md/run           roundtrip, graph, pinned, refdoc: OUR blobs
+                                only, nothing outside this repository; about
+                                12 s; stops at the first failure
+    tests/full/md/run reference
+                                adds Sun's T1 comparison (needs the T1 tree)
+    tests/full/md/run pinned    one of the checks alone (reference, roundtrip,
+                                graph, refdoc, pinned)
+    tests/full/md/regenerate.sh
+                                rewrite expected/blobs.sha256 after an
+                                intended md/ change
+
+Needs only this repository and GNU cpp. The `reference` check also needs
+Sun's OpenSPARC T1 tree, OpenSPARCT1_Arch.1.5.tar.bz2 unpacked (the address is
+in md/REFERENCE): pass its directory as T1=DIR. It is checked by hash. Without
+it only that check is skipped. No QEMU, no Solaris.
+
+The idea: a machine description is compiled (cpp + mdgen), and the compiled
+bytes are what the guest and hypervisor see. So the checks are on bytes and on
+a canonical text that can be turned back into the same bytes.
+
+lib/mdunfold.py  unfolds a binary MD into mdgen source, one element per line,
+                 no cpp, no macros, nodes labelled n<element index>, data
+                 written byte by byte (mdgen drops a wider number's leading
+                 zero bytes, so a byte is the only spelling that keeps the
+                 length). Refolding it with mdgen must give the same bytes,
+                 and unfolding that must give the same text again.
+
+internal/
+  reference.sh  THE REFERENCE. First the reference tree is checked by hash
+                (expected/sun-t1-sources.sha256: Sun's 8 config sources;
+                expected/sun-t1-binaries.sha256: the 12 shipped binaries, the
+                six in S10image/ and the six built copies in
+                legion/src/config/niagara/, which are byte-identical). Only
+                hashes are stored here, no Sun text. A modified tree fails as
+                "not the pristine OpenSPARC T1" instead of giving a confusing
+                later mismatch.
+                Then Sun's own T1 config sources (1up, 1g2p, 1g32p; guest and
+                hv) through our chain must equal Sun's SHIPPED binaries
+                (S10image/*.bin) byte for byte; each shipped binary must
+                unfold and refold to itself; the unfolded text must be a
+                fixpoint. Six binaries. If this fails the toolchain does not
+                compile MD the way Sun did and nothing else here counts.
+  roundtrip.sh  our md/<target>/ configs, hash measured at every stage:
+                  B0 (as built, H0) -> unfold -> mdgen -> B1 (H1)
+                     -> mdlint -> unfold -> mdgen -> B2 (H2)
+                H0 = H1 = H2; mdlint silent and exit 0 on B1; the unfolded
+                text of B0-refold equals that of B1 (fixpoint); `mdlint -t`
+                text equal for B0 and B2; a second independent `make md`
+                gives H0.
+  graph.sh      the graph an MD encodes (lib/mdgraph.py). For OUR blobs any
+                finding fails:
+                  `target`  an arc to a non-node
+                  `root`    not exactly one root
+                  `pair`    a fwd without its back or a back without its fwd
+                            (FWARC 2005/115 md-info 3.1: "for every node A
+                            that has a fwd arc pointing to another node B,
+                            there is a corresponding back arc for node B
+                            pointing back to A"; illumos walks the back arcs,
+                            fillsysinfo.c:250,333,1234)
+                  `reach`   a node the root cannot reach by fwd arcs
+                The hv MD is outside 2005/115 (its parser filters by node
+                type); the same rules are our convention there. Sun's
+                HW1-era shipped binaries DO violate pair/reach, so they are
+                checked for target/root only and are not a model of what
+                later Solaris accepts.
+                mdlint does not check the graph: an arc retargeted to a node
+                that does not exist (element 0x7fff) passes it silently.
+                mdlint is a structure gate; dangling arcs are caught here.
+  refdoc.sh     md/REFERENCE against our MD blobs (lib/refdoc.py).
+                Part 1: the node types, their fwd and back arcs and
+                properties (Structure table), and the property values of the
+                hypervisor MD (MD_MEM and memsize not compared).
+                Parts 2 and 3: the (node, property) positions of the guest MD
+                against the part 2 table, the read column of the positions no
+                specification lists, and the counts the text states.
+                Failing means the document or an hdesc/pdesc is out of date.
+  pinned.sh     our blobs against expected/blobs.sha256. Failing is not
+                necessarily a bug: it says a config's MD changed. Unfold both
+                versions and diff, then regenerate.sh and commit expected/
+                with md/.
+
+mdlint as the gnu build makes it needs patches/mdtools/gnu/
+mdgen-mdlint-host-endian.patch: without it mdlint rejects every MD on a
+little-endian host ("Unrecognised transport version").
+
+What this does NOT cover
+------------------------
+Only structure and bytes. It does not check that the hypervisor or OpenBoot
+read what is in a blob (that is a boot), and pinned.sh cannot tell an intended
+change from a mistake.

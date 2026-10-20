@@ -1,0 +1,26 @@
+Booting Solaris 10 1/13 on legion
+=================================
+
+Oracle Solaris 10 1/13 (Update 11) boots on legion from the DVD image, on a
+stock QEMU with 1024 MB of RAM, up to the miniroot running from RAM.
+1024 MB is required: with this image at 2048 MB Solaris starts to enable 256M
+pages, which a stock QEMU mishandles, and the OS hangs (see md/legion/README).
+The image is V36434-01.iso (SPARC DVD) from the Oracle E-Delivery website.
+
+QEMU must handle disk images over 2 GiB (this DVD is a bit over 2 GiB). Use
+11.0.3 or later, or 10.0.12 or later in the 10.0 series.
+
+Build the firmware with 1024 MB:
+
+    ./configure --with-md-mem=1024
+    make all                    # on Solaris: `gmake`
+
+Start QEMU with the image as the Legion disk:
+
+    qemu-system-sparc64 -M niagara -m 1024 -L ./output -nographic \
+        -serial mon:stdio \
+        -drive if=pflash,file=V36434-01.iso,format=raw,readonly=on
+
+At the `ok` prompt type `boot`.
+
+Checked with QEMU 10.0.13 from a Debian 13 container.

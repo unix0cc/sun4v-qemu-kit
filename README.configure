@@ -1,0 +1,137 @@
+./configure -- optional, and what it is for
+============================================
+
+Optional: `make` with default guest machine settings works without `configure`.
+`configure` probes the compilers and tools of the `sun` or `gnu` path, sets
+the build's parameters, and writes both to config.auto.mk.
+
+    ./configure                         # default settings
+    ./configure --with-target=NAME --with-md-mem=MB
+                                        # `NAME`: a subdirectory of md/
+                                        # `MB`: guest memory in megabytes
+    make config                         # show what will be built
+    make test                           # build, check the booting to `ok`
+                                        # with the stock qemu; on the `sun`
+                                        # path: runs sun-verify instead
+
+Delete config.auto.mk to undo it.
+
+Options
+-------
+A variable given to `make` (`make OUTDIR=...` or `make MD_MEM=...`) wins over
+what `configure` wrote.
+
+    --with-toolchain=gnu|sun
+        default: `sun` on SunOS, `gnu` elsewhere
+    --with-gcc-cross=DIR
+        `gnu`: sparc64-linux-gnu-* are in DIR/bin or DIR (default: PATH)
+    --with-binutils-cross=DIR
+        `gnu`: sparc64-linux-gnu-{as,ld,size,readelf,objcopy,objdump} are in
+        DIR/bin or DIR, and the cross gcc is made to use them too
+        (config.wrap/: the gcc given -B for them). A gcc built
+        --with-as/--with-ld ignores -B: configure then stops, see the as/ld
+        probe
+    --with-gcc=DIR
+        `gnu`: the host's own gcc, which builds mdgen and mdlint, is DIR/bin/gcc
+        or DIR/gcc (default: PATH)
+    --with-sun-studio=DIR
+        `sun`: the Studio; DIR, DIR/bin or DIR/SUNWspro has the cc (Studio 12.0
+        installs into PREFIX/SUNWspro). Default: the first cc on PATH
+        that is Sun's (`PATH=/any/where/bin:$PATH ./configure`), else the
+        first of /opt/SUNWspro, /opt/developerstudio12.6, ... that has one.
+        `configure` says which of these it used
+    --with-outdir=DIR
+        OUTDIR: where the build writes the firmware set
+    --with-workdir=DIR
+        WORKDIR: where the build keeps the rest (copies of the sources,
+        `mdgen`). Default: `$TMPDIR` or /var/tmp, in a directory named after
+        OUTDIR. `configure` prints it
+    --with-target=NAME|all
+        TARGET: the machine a plain make builds; legion is the default.
+        NAME is any md/NAME/ that has a 1up.pdesc, found in the tree, not
+        listed in configure. all builds every one of them, each as a full
+        set of its own in OUTDIR/NAME
+    --with-md-mem=MB
+        MD_MEM (also `make MD_MEM=MB`): guest RAM, whole MB; the default is the
+        machine's own (`make config` shows it). `configure` warns about sizes
+        that were not tested. QEMU's -m must be the same number; nothing checks
+    --enable-hv-uart
+        keep the hypervisor's own console (CONFIG_HVUART). Disabled by
+        default. QEMU must support it; the hypervisor hangs without
+    --prefix, --datadir, --docdir
+        where `make install` puts the set (README.USAGE). The other directory
+        options of --help are Autoconf's standard set and nothing here uses
+        them.
+
+Choosing the compiler
+---------------------
+`gnu`: Two compilers: the cross gcc (hypervisor and PROM) and the host gcc
+       (mdgen, mdlint).
+
+       Cross gcc: the first sparc64-linux-gnu-{gcc,as,ld,objcopy,size} on PATH.
+       To use another one (all five tools from one installation, with its -m32
+       multilib):
+           ./configure --with-gcc-cross=<dir>    # <dir>/bin holds the tools
+           PATH=<dir>/bin:$PATH make all         # without configure
+
+       Host gcc: the gcc on PATH. To use another one:
+           ./configure --with-gcc=<dir>
+           make HOST_GCC=<dir>/bin/gcc           # without configure
+
+       GCC 15 and later default to C23, which the sources predate: they need
+       -std=gnu17 (GNU_CSTD for the cross gcc, HOST_CSTD for the host gcc).
+       ./configure adds it itself; without it:
+           make GNU_CSTD=-std=gnu17 HOST_CSTD=-std=gnu17
+
+       `make config` shows which gcc is used. A <dir> without a gcc is an
+       error, not a fall back to PATH.
+
+`sun`: the default is /opt/SUNWspro. Another Studio:
+       `./configure --with-sun-studio=/opt/solarisstudio12.4` or
+       `gmake SUN_STUDIO=/opt/solarisstudio12.4`. Its bin directory is put on
+       PATH for the build's commands (SUN_PATH in config.mk).
+
+What it checks
+--------------
+`configure` probes the tools by running them on the build's own sources, on both
+paths: it compiles a few of the hypervisor and PROM sources with the flags the
+build uses, and runs the emulators (qemu-sparc64 and qemu-sparc32plus on `gnu`).
+Where a known answer is needed, a small stand-in is used. It probes
+capabilities, never versions; the version is printed.
+
+What it decides: the compiler flags the sources need (`-std=gnu17` for GCC 15
+and later; `-xbuiltin=%none` for Studio 12.3 and later), and whether offsets.h
+comes from stabs or DWARF (Studio 12.6 writes no stabs). Everything else it
+only checks and reports: a missing tool stops it with the reason.
+
+Only the presence of these is checked, by name: `make`, `flex`, `python3`,
+`perl`, `cpp`, `ar`, `awk` and the other tools of REQUIREMENTS.*.
+
+Measured results for each compiler: build_matrix.
+
+Failures and rules
+------------------
+- A missing or unusable tool stops configure with the reason and the fix. It
+  also replaces config.auto.mk with a `$(error ...)` line, so a later make
+  stops with the same message instead of building with the answers of an
+  earlier run.
+- `configure` is generated from configure.ac by `autoconf` (needs `m4`).
+- An OUTDIR holds one firmware set. Building another TARGET into it, or
+  `make install` of it with other TARGET or MD_MEM than it was built with,
+  is refused: run `make clean`, or use another OUTDIR.
+- One `make` at a time per OUTDIR (the second says which process). A lock of
+  a make that is gone is taken over.
+- Moved or copied since `./configure`: `make` stops and asks to run it again.
+- A space in the path of the tree, OUTDIR or WORKDIR is refused. MD_MEM must
+  be a whole number of MB.
+- WORKDIR is removed by `make clean`, `make distclean` and by a second
+  `configure`, and only if it carries the marker file that the build put in
+  it. A WORKDIR that exists, is not empty and has no marker is refused.
+- configure can be run from another directory (`mkdir b && cd b &&
+  ../configure`). It writes config.auto.mk there, and a Makefile that passes
+  every goal on to the one in the source tree; the output goes to
+  ./output there (--with-outdir changes it). The source tree is
+  not written to. Run make in that directory. `make distclean` there removes
+  what configure wrote.
+- The cache (`-C`) is not used: its answers would not say which compiler they
+  came from. Run `configure` again after changing compiler or PATH.

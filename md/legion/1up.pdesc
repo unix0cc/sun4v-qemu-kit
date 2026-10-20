@@ -1,0 +1,190 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Modified 2026 for sun4v-qemu-kit (see git log). Modifications Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file */
+/*
+* ========== Copyright Header Begin ==========================================
+* 
+* OpenSPARC T1 Processor File: 1up.pdesc
+* Copyright (c) 2006 Sun Microsystems, Inc.  All Rights Reserved.
+* DO NOT ALTER OR REMOVE COPYRIGHT NOTICES.
+* 
+* The above named program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public
+* License version 2 as published by the Free Software Foundation.
+* 
+* The above named program is distributed in the hope that it will be 
+* useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+* General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public
+* License along with this work; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+* 
+* ========== Copyright Header End ============================================
+*/
+/*
+ * Copyright 2005 Sun Microsystems, Inc.  All rights reserved.
+ * Use is subject to license terms.
+ *
+ * ident	"@(#)1up.pdesc	1.6	05/08/29 SMI"
+ */
+
+/* The legion machine. Boots on unmodified upstream QEMU. See md/README. */
+
+#include "../common.pdesc"
+
+ADD_CPU(0)
+
+/* Guest RAM. Must match QEMU's -m; nothing diagnoses a disagreement. */
+#ifndef MD_MEMSIZE
+#define MD_MEMSIZE 4096M
+#endif
+node mblock p0_memlist0 {
+	back -> memory;
+	base = 0x0000000080000000;
+	size = MD_MEMSIZE;
+}
+
+node memory memory {
+	fwd -> p0_memlist0;
+	back -> root;
+}
+
+node cpus cpus {
+	fwd -> cpu0;
+	back -> root;
+}
+
+node cache cache {
+	back -> cpu0;
+}
+
+node tlb tlb {
+	back -> cpu0;
+}
+
+/* The Legion simulated disk. */
+
+
+node virtual-device disk {
+	back -> vdev;
+	name = "disk";
+	/* Must be a list. SUNW,legion-disk is the OBP dropin that drives it. */
+	compatible = { "SUNW,legion-disk" };
+	ino = 0;
+	cfg-handle = 0;
+}
+
+/*
+ * T2 OBP reads its configuration from here. Every node needs its back arc, or
+ * OBP never sees it. The older node `options` is not read by this OBP.
+ */
+node openboot XXopenboot {
+     back -> root;
+     fwd -> XXvariables;
+     fwd -> XXdevalias;
+}
+
+node variables XXvariables {
+     back -> XXopenboot;
+     fcode-debug? = "true";
+     /* Ordered: OBP boots the first entry that answers. */
+     boot-device = "disk";
+     input-device = "ttya";
+     output-device = "ttya";
+     /*
+      * "true" boots unattended. "false" stops at ok, where the flags are
+      * `boot`, `boot -v`, `boot -kv` (kmdb resident) or `boot -kd`.
+      */
+     auto-boot? = "false";
+}
+
+node devalias XXdevalias {
+     back -> XXopenboot;
+     /* `vdisk` is a second name for the same device. */
+     disk = "/virtual-devices/disk@0";
+     vdisk = "/virtual-devices/disk@0";
+     nvram = "/virtual-devices/nvram@5";
+     ttya = "/virtual-devices/console@1";
+     ttyb = "/virtual-devices/console@4";
+     /* Which MD this firmware was built from. Not a device path. */
+#ifndef MD_TYPE
+#define MD_TYPE "unknown"
+#endif
+     md-type = MD_TYPE;
+}
+
+/* content-version is a string here; the hv MD uses a u64. T2 OBP needs both. */
+node root root {
+	content-version = "1.0";
+	reset-reason = 0;			   // power-on
+	fwd -> XXopenboot;
+	fwd -> platform_data;
+	fwd -> vdev;
+	fwd -> memory;
+	fwd -> cpus;
+}
+
+node platform platform_data {
+     back -> root;
+     /* The name the boot banner prints. */
+#ifndef BANNER_NAME
+#define BANNER_NAME "Sun Fire T2000"
+#endif
+     banner-name = BANNER_NAME;
+     name = "SUNW,Sun-Fire-T2000";
+     mac-address = 0x8003dead03;        // mac address
+     hostid = 0x80112233;
+     serial# = 11223344;
+     /* Must be what QEMU ticks (hw/sparc64/sparc64.c). Solaris derives all
+        its time from this: a wrong value makes the guest clock run wrong. */
+     stick-frequency = 100000000;
+     clock-frequency = 5000000;
+     /* Required: T2 OBP aborts without it. */
+     max-cpus = 0x20;
+}
+
+
+/* `name` is required, or /virtual-devices/console does not resolve. */
+node virtual-devices vdev {
+    name = "virtual-devices";
+    device-type = "virtual-devices";
+    /* Must be a list: a bare string is stored as a type probe.fth ignores. */
+    compatible = { "SUNW,sun4v-virtual-devices" };
+    cfg-handle = VDEV_HANDLE;
+    /* Both directions needed: OBP enumerates children by their fwd arcs. */
+    back -> root;
+    fwd -> disk;
+    fwd -> console;
+    fwd -> nvram;
+    fwd -> tod;
+}
+
+
+node virtual-device console {
+	back -> vdev;
+	name = "console";
+	ino = 0x11;
+	/*
+	 * "qcn" MUST come first. Solaris binds on the first match, and only
+	 * that name makes it poll the console instead of waiting for an
+	 * interrupt this hv never delivers. Do not reorder.
+	 */
+	compatible = { "qcn", "SUNW,sun4v-console" };
+	cfg-handle = 0x1;
+}
+
+node virtual-device nvram {
+	back -> vdev;
+	name = "nvram";
+	ino = 0;
+	cfg-handle = 0x2;
+}
+
+node virtual-device tod {
+	back -> vdev;
+	name = "rtc";
+	ino = 0;
+	cfg-handle = 0x3;
+	compatible = "sun4v-tod";
+}

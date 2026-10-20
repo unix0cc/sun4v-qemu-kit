@@ -1,0 +1,131 @@
+Source patch for the GNU build layer only -- os/unix/wrapper.c, os/unix/fsys.c.
+
+The last of the engine's warnings under GCC 13, none of them fatal under
+GCC 14, fixed so the build is warning-free and the next one stands out:
+
+  #endif SCCS / #endif SYS5 (five) -- K&R-era trailing labels, now comments.
+
+  system(sccs_get(name)) (three, fsys.c) and write(2, ...) (three,
+    wrapper.c's error()) -- glibc marks both warn_unused_result, and GCC
+    ignores a (void) cast for that attribute on purpose, so the result is
+    assigned and then dropped, with the reason next to it. The system()
+    calls are Sun's auto-`sccs get` on an obsolete file, reachable only
+    with -u, which this build never passes; error() writes to stderr on the
+    way to exit. Nothing to do with either result.
+
+  getwd(buf) -> getcwd(buf, MAXPATHLEN+1) (fsys.c s_getwd) -- the buffer is
+    malloc(MAXPATHLEN+1) two lines up, so this is the same call with the
+    bound glibc's deprecation and ld's "dangerous" note are about. Same
+    return convention (buf or NULL).
+
+Applied last, after printf-widths.patch, by build/obp/gnu/engine/Makefile to a
+staged copy; src/obp is never touched.
+
+diff -ru a/os/unix/fsys.c b/os/unix/fsys.c
+--- a/os/unix/fsys.c	2026-09-22 12:39:48.412136672 +0200
++++ b/os/unix/fsys.c	2026-09-22 12:41:47.433665569 +0200
+@@ -454,9 +454,11 @@
+ 
+ #ifdef SCCS
+ 	if (uflag)
+-		if (isobsolete(name) == 1)
+-			system(sccs_get(name));
+-#endif SCCS
++		if (isobsolete(name) == 1) {
++			int rc = system(sccs_get(name));
++			(void) rc;	/* the open below reports a still-missing file */
++		}
++#endif /* SCCS */
+ 	if (vflag)
+ 		printf("File: %s\n", name);
+ 
+@@ -622,7 +624,7 @@
+ 	int len;
+ 
+ 	buf = malloc(MAXPATHLEN+1);
+-	sbuf = getwd(buf);
++	sbuf = getcwd(buf, MAXPATHLEN+1);
+ 	if (sbuf != NULL) {
+ 		len = strlen(buf);
+ 		sbuf = strdup(buf);
+@@ -925,8 +927,10 @@
+ 
+ #ifdef SCCS
+ 	if (uflag)
+-		if (isobsolete(name) == 1)
+-			system(sccs_get(name));
++		if (isobsolete(name) == 1) {
++			int rc = system(sccs_get(name));
++			(void) rc;	/* the open below reports a still-missing file */
++		}
+ #endif
+ 	/*
+ 	 * open the file, using SCCS if required
+@@ -971,8 +975,10 @@
+ 	printf("Bootstrap: %s (%s)\n", cname, name);
+ #ifdef SCCS
+ 	if (uflag)
+-		if (isobsolete(name) == 1)
+-			system(sccs_get(name));
++		if (isobsolete(name) == 1) {
++			int rc = system(sccs_get(name));
++			(void) rc;	/* the open below reports a still-missing file */
++		}
+ #endif
+ 
+ 	/*
+diff -ru a/os/unix/wrapper.c b/os/unix/wrapper.c
+--- a/os/unix/wrapper.c	2026-09-22 12:39:48.412136672 +0200
++++ b/os/unix/wrapper.c	2026-09-22 12:41:47.432665564 +0200
+@@ -533,7 +533,7 @@
+ 	else
+ 		strcat(sccs_get_cmd, getenv("SCCSGETFLAGS"));
+ 	strcat(sccs_get_cmd, " ");
+-#endif SCCS
++#endif /* SCCS */
+ 
+ 	/*
+ 	 * Read just the header into a separate buffer,
+@@ -958,9 +958,12 @@
+ void
+ error(char *str1, char *str2)
+ {
+-	write(2, str1, strlen(str1));
+-	write(2, str2, strlen(str2));
+-	write(2, "\n", 1);
++	ssize_t r;
++
++	r = write(2, str1, strlen(str1));
++	r = write(2, str2, strlen(str2));
++	r = write(2, "\n", 1);
++	(void) r;	/* stderr, on the way to exit: nowhere to report a failure */
+ }
+ 
+ 
+@@ -998,7 +1001,7 @@
+ 	if (uflag)
+ 		if (isobsolete(name) == 1)
+ 			s_system(sccs_get(name));
+-#endif SCCS
++#endif /* SCCS */
+ 
+ 	return ((long)open(name, (int)flag, (int)mode));
+ }
+@@ -1085,7 +1088,7 @@
+ 
+ #ifdef SYS5
+ #define	bzero(b, n) (void *)memset(b, 0, n)
+-#endif SYS5
++#endif /* SYS5 */
+ long
+ m_alloc(long size)
+ {
+@@ -1376,7 +1379,7 @@
+ 	return (str);
+ }
+ 
+-#endif SCCS
++#endif /* SCCS */
+ 
+ char *
+ expand_name(char *name)

@@ -1,0 +1,40 @@
+Source patch for the GNU build layer only -- applies to tools/makeprom.c.
+Not a patch to sys/dropins.h (Sun's header, untouched); the fix is entirely
+in makeprom.c's own two call sites.
+
+Why: sys/dropins.h's ROUNDUP(n) macro casts through (unsigned int) before
+rounding -- correct and invisible on the 32-bit ABI these tools were always
+built for (a pointer and an unsigned int are both 4 bytes there), but a
+silent 64-bit-pointer truncation on any modern LP64 host, x86_64 or
+sparc64-linux-gnu alike. makeprom.c calls the generic, size-oriented
+ROUNDUP() on a real pointer at exactly two sites; every other ROUNDUP()
+call in the tree rounds an integer size, which this patch leaves untouched.
+
+Root-caused 2026-09-19 by connecting gdb-multiarch to qemu-sparc64's own
+gdbstub (`qemu-sparc64 -g <port> makeprom ...`, `target remote`, `catch
+signal SIGSEGV`) rather than guessing from register dumps: the fault was
+is_dropin() dereferencing a plainly truncated pointer (fits in 32 bits;
+every real 64-bit heap address on the build host is far larger).
+
+Fix: PTR_ROUNDUP(p), a build-layer macro in engine/compat.h that rounds
+through uintptr_t instead of unsigned int, at the two call sites that round
+a pointer.
+
+--- a/tools/makeprom.c
++++ b/tools/makeprom.c
+@@ -237,13 +237,13 @@
+ 			}
+ 		}
+ 		total = ((char *)obmdp) - start;
+-		obmdp = (obmd_t *)ROUNDUP(obmdp);
++		obmdp = (obmd_t *)PTR_ROUNDUP(obmdp);
+ 	}
+ 	if ((verify) && (total < size)) {
+ 	    char *here;
+ 
+ 	    /* Scan forward looking for more headers.. */
+-	    here = (char *)ROUNDUP((char *)obmdp);
++	    here = (char *)PTR_ROUNDUP((char *)obmdp);
+ 	    while (((here-start) < size) && (!is_dropin(here)))
+ 		here += 4;
+ 

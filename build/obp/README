@@ -1,0 +1,189 @@
+Building openboot.bin
+=====================
+
+OpenBoot is Sun's implementation of IEEE 1275-1994, Open Firmware:
+https://standards.ieee.org/ieee/1275/1932/
+
+    make obp          TOOLCHAIN=sun on Solaris/SPARC, TOOLCHAIN=gnu on GNU/Linux
+    make obp-verify   gnu only: the equivalence check against Sun's own images
+
+Output: $(OUTDIR)/openboot.bin. Both paths build the same Sun sources, apply
+the same patches/obp/forth/*.patch, and produce equivalent images.
+
+Sun's makefiles build in place, so the build copies src/obp to
+$(WORKDIR)/sun4v-qemu-kit and works there.
+
+
+Requirements
+------------
+sun path (the reference):
+  - Solaris/SPARC. The host tools and the target's decomp.o share one
+    compiler, so this is a native build.
+  - Sun Studio. Default SUN_STUDIO=/opt/SUNWspro.
+  - /usr/ccs/bin/make, the SysV make. NOT gmake: these makefiles use
+    `VAR:sh =` and target-local `target := VAR +=`. gmake does not fail
+    loudly here, it mis-parses.
+
+gnu path: the sparc64-linux-gnu cross toolchain with its -m32 multilib, and
+the qemu-sparc64 and qemu-sparc32plus linux-user emulators. Full list in
+REQUIREMENTS.LINUX. Driver: build/obp/gnu/build-obp.sh, called by `make obp`.
+
+
+Why the build host must run SPARC code
+--------------------------------------
+The Forth engine is portable C, but the dictionary it loads is native SPARC
+machine code, entered as a function pointer: each word ends in real SPARC
+instructions, called directly, not interpreted. So whatever runs the build
+must execute SPARC. Everything else in src/obp is built from source,
+including the engine and every host tool.
+
+The .dic files in src/obp are not sourceless either. Sun's build metacompiles
+six of the seven from obp/fm/kernel and obp/fm/meta on every run
+(fm/kernel/sparc/depend.mk), starting from one shipped root,
+obp/os/sun/sparc/forth.dic:
+
+    forth.dic -> kernel-xref.dic -> forth32-xref.dic -> k32t32-xref.dic
+              -> f32t32.dic -> k64t32.dic, and f32t32.dic -> tokenize.dic
+
+The whole chain, from forth.dic to openboot.bin with the tools, the two engines
+and the dropins, is drawn in docs/obp-chain.png.
+
+The 32-bit kernel is built twice in that chain, once by the shipped root and
+once by a host rebuilt around the new kernel. The two are identical: the
+kernel reproduces itself. Both paths run this chain from the same root, so
+forth.dic is the one shipped binary either path reads.
+
+os/unix/simforth/ looks like a way around this -- a SPARC simulator instead
+of the real thing -- but only a stray .fth file and a depend.mk survive in
+the release, no simulator source.
+
+
+The gnu path
+------------
+Emulation, not portability. The engine (wrapper.c, fsys.c) and the host
+tools that write the OBMD headers (makedi, makeprom, libchksum) are
+cross-built static for sparc64-linux and run under QEMU linux-user, which
+executes the dictionary's SPARC code on an x86 host.
+
+The engine is built twice, and each runs the steps Sun's build runs on it:
+
+    forth32  -m32, under qemu-sparc32plus: builds every dictionary from
+             forth.dic (build/obp/gnu/tools/bootstrap-dics.sh), then the
+             tokenizer, fonts and logo
+    forth64  under qemu-sparc64: bootprom.bin, stand.dic, reset.o
+
+There is no sparc-linux-gnu triplet; the 32-bit engine comes from the sparc64
+cross gcc's -m32 multilib and Ubuntu's 32-bit SPARC glibc
+(gcc-13-multilib-sparc64-linux-gnu, libc6-dev-sparc-sparc64-cross).
+
+Sun's own dropins.mk and every per-dropin depend.mk are used unchanged; only
+the dmake layer (common.mk) is reimplemented, in
+build/obp/gnu/obp-gnu{,-inner}.mk. Every substitution, with why it is needed
+and how it was shown equivalent, is listed in tests/full/obp/TESTS. Patches
+needed only by this path are in patches/obp/gnu/; they do not change the
+product.
+
+What still differs from the sun path's output:
+  - decomp.o's code: a different compiler, same behaviour on every real
+    payload;
+  - addresses of the engine binary saved inside the Forth images stand.dic
+    and bootprom.bin. The PROM re-initialises them at cold start.
+
+
+Checking the result: make obp-verify
+------------------------------------
+Seven checks (tests/full/obp/internal/*.sh, run in order by
+tests/full/obp/run), entirely on the gnu path, no tarball or Solaris host
+needed. The first (src-intact.sh) is not OBP-specific -- it checks
+PRISTINE-MANIFEST against the whole working tree, src/hypervisor included --
+the other six are:
+
+  1. The three kernels a pci build makes from forth.dic are byte-identical
+     to the copies Sun shipped in src/obp, and their six word listings match
+     Sun's line for line (dic-kernels.sh).
+  2. A second bootstrap generation, using the first generation's own output
+     as the root instead of Sun's, reproduces both itself and the first
+     generation exactly (dic-fixpoint.sh).
+  3. The host dictionaries the build actually runs (forth32-xref.dic,
+     f32t32.dic) reconcile against Sun's shipped copies once the known,
+     already-understood differences are accounted for -- a shift from one
+     assembler word Sun's shipped copies lack, and the engine-binary-address
+     class (dic-host.sh, tests/full/obp/lib/dic-diff.py).
+  4. Pristine builds (none of patches/obp/forth) of the two targets Sun
+     shipped an image of, niagara2/release and niagara/t1_fpga, are walked
+     record by record: every record except OBP (decomp.o) and bootprom must
+     match Sun's byte for byte. The expected hashes are in
+     tests/full/obp/expected/sun-records.sha256, taken from the OpenSPARC T2
+     release archive (sun-records.sh).
+  5. A pristine build and the patched (product) build differ only in the
+     dropins this project's own patches touch, nothing else
+     (patch-locality.sh).
+  6. The word list of the pci build's stand.dic is compared with
+     tests/full/obp/expected/dict-dump.sha256 (dict-content.sh).
+
+`make obp-test-external TARBALL=<OpenSPARCT2_Arch.1.2.tar.bz2>` additionally
+confirms src/obp and src/hypervisor are what Sun's release archive actually
+contains (needs the tarball; not part of the gate above).
+`tests/full/obp/external/sun-records-regenerate.sh <tarball>` rewrites both
+committed hash files above; needed only after src/obp changes, review the
+diff before committing.
+
+tests/full/obp/TESTS has the details and the evidence behind each claim.
+
+
+Three quirks in Sun's makefiles
+-------------------------------
+build/obp.mk (sun path) works around all three. The gnu path never runs
+Sun's dmake layer; obp-gnu.mk handles 2 and 3 in its own rules.
+
+1. dropins.mk must exist before the first make. arch/common.mk includes it
+   and also generates it, but Sun make treats a missing include as fatal and
+   will not remake it first. An empty one is seeded.
+
+2. decomp.o needs its own make invocation. DECOMPSIZE runs `size -f decomp.o`
+   when the makefile is parsed, so on a clean tree it expands empty and
+   reset.o compiles with a malformed constant.
+
+3. reset.bin must be padded before makeprom reads it. Its header counts .bss,
+   which occupies no file bytes, so the record is short and the dropin chain
+   breaks at its first link. See build/obp/pad-reset-bin.sh.
+
+Quirk 3 produces no output at all -- not one character -- so every build
+walks the finished chain (build/obp/verify-dropin-chain.sh) and refuses an
+image whose records do not end exactly at EOF.
+
+
+Which image is running
+----------------------
+QEMU searches every -L directory and will pick up an openboot.bin you did not
+mean. Both paths stamp the image the same way, from build/stamp.sh: the
+release string is 4.x.build_122+qemu where Sun's says
+4.x.build_122***PROTOTYPE BUILD***, and 4.x.build_122+qemu-0.1 when built
+from a clean checkout of tag v0.1 (OBP_FIRMWAREREL overrides it). The
+sub-release carries the date and commit. At ok:
+
+    ok cd /openprom
+    ok .properties
+    version    OBP 4.x.build_122+qemu 2026/09/28 23:05
+    model      SUNW,4.x.build_122+qemu[ sun4v-qemu-kit 09/28/26 23:05 git <rev> #0]
+
+The date is not the time of the build. It is SOURCE_DATE_EPOCH if set, else
+the commit date of a clean tree, in UTC, so two builds of one commit give the
+same openboot.bin (and the same q.bin, which takes its date from the same
+build/stamp.sh). Only a tree with uncommitted changes -- "-dirty" after the
+hash -- stamps the build time instead.
+
+`#0` at the end is Sun's build counter: Sun's makefile raised it with every
+rebuild in one tree. Here it is always 0, so that two builds of one commit stay
+byte-identical.
+
+On the sun path the stamp reaches Sun's makefiles as command-line macros
+(SUB-RELEASE, FIRMWAREREL, DATEFMT; build/obp.mk), which override their own,
+so release.mk's logname and workspace name no longer appear.
+
+Do not use `.compile-date`: it has no name in the dictionary.
+
+Niagara2 images have dropins that T1 images do not: niu-nexus, niu-network.
+
+A normal build is never byte-identical to Sun's image: the recipe stamps the
+build date and increments a counter every time.

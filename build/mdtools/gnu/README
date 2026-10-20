@@ -1,0 +1,37 @@
+mdgen/mdlint on GNU tools
+=========================
+
+    make mdtools TOOLCHAIN=gnu
+
+Builds from src/hypervisor/src/support with gcc, on any host. src/ is not
+modified: build.sh copies the sources out and patches them there.
+
+The patches (patches/mdtools/gnu/)
+----------------------------------
+mdgen-mdlint-host-endian.patch
+
+1. Endianness. MDESC is network byte order and Sun built on SPARC, so their
+   hton/ntoh macros are identity and the little-endian arm is an #error. The
+   patch adds a real arm keyed on __BYTE_ORDER__, in all three files that
+   carry the block.
+
+2. A missing swap. output_bin.c writes an integer property without hton64(),
+   while the arc case above it applies one -- a real Sun bug, invisible on
+   big-endian, unfixed through the version vendored here. Without it every
+   integer property comes out byte-reversed and nothing warns.
+
+mdgen-mdlint-printf-int64.patch
+
+   Prints uint64_t with PRIx64/PRId64 instead of %llx/%lld, so that -Wformat
+   is clean on an LP64 host. Cosmetic: the output is unchanged.
+
+build.sh also regenerates mdlex.c with flex and passes -include stdint.h
+(md_impl.h relies on Solaris header pull-in order) -- neither is a source
+change.
+
+Validation
+----------
+The MD blobs built with these tools are pinned by hash in
+tests/full/md/expected/blobs.sha256 (make md-verify), and the sun path
+(Sun's own compiler) must give the same bytes (make sun-verify). Re-check
+both if the vendored sources are updated.

@@ -1,0 +1,187 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file */
+/*
+ * Hypervisor MD, legion variant. Complete and self-contained.
+ * See md/legion/1up.pdesc and md/README.
+ */
+
+#include "../common.hdesc"
+
+
+
+/*
+ * The hypervisor MD, content-version 1.0 -- the format the T2-release hv
+ * requires. Written to what the hypervisor reads (mdsup.c, res_guest.c,
+ * res_vcpu.c, res_memory.c, res_console.c); md/README and md/REFERENCE say
+ * where each value comes from. Cut down to a single-guest domain.
+ *
+ * Above each value: where it comes from. The sources are named like this:
+ *   T1-archive   OpenSPARCT1_Arch.1.5.tar.bz2 (legion/..., common.hdesc, 1up.conf); GPL-2, see LICENSE_CODE
+ *   T2-archive   OpenSPARCT2_Arch.1.2.tar.bz2, t1_fpga/src/xilinx/configs/*_hv.desc
+ *                (the layout of this file is theirs)
+ *   QEMU         hw/sparc64/niagara.c
+ * A value that both archives and the hypervisor share is dictated by the
+ * hypervisor.
+ */
+
+/* Where QEMU loads the guest MD (NIAGARA_MD_ROM_BASE). */
+#define	GUEST_MDPA	0x1f12000000
+
+/* Must be what QEMU ticks, or every derived clock is wrong. */
+#define	STICK_FREQ	100000000
+
+node root root {
+	/* hv code: major 1 (config.h:98), checked in reconf.c:124. Also in T2-archive. */
+	content-version	= 0x100000000;		/* major 1, minor 0 */
+	/* ours: what QEMU ticks. The T2 sources use the FPGA's. */
+	stick-frequency	= STICK_FREQ;
+
+	fwd -> platform;
+	fwd -> guests;
+	fwd -> cpus;
+	fwd -> memory;
+	fwd -> maus;
+	fwd -> cwqs;
+	fwd -> devices;
+	fwd -> consoles;
+
+	/* T1-archive: legion/common.hdesc HVUART; our devel/0003-niagara-hvuart-console.patch (github.com/unix0cc/qemu-experimental-patches) maps the UART at the same address. Also in T2-archive. */
+	hvuart		= HVUART;
+	/* QEMU NIAGARA_RTC_BASE (hw/sparc64/niagara.c): where QEMU puts the RTC. T1-archive: legion/common.hdesc HVTOD has the same address. */
+	tod		= HVTOD;
+}
+
+node platform platform {
+	back -> root;
+	/* ours: what QEMU ticks. The T2 sources use the FPGA's. */
+	stick-frequency	= STICK_FREQ;
+}
+
+node guests guests {
+	back -> root;
+	fwd -> guest0;
+}
+
+node cpus cpus {
+	back -> root;
+	fwd -> cpu0;
+}
+
+node memory memory {
+	back -> root;
+	fwd -> mblock0;
+}
+
+/* Empty, but required: the hv aborts if these containers are absent. */
+node maus maus {
+	back -> root;
+}
+
+node cwqs cwqs {
+	back -> root;
+}
+
+node devices devices {
+	back -> root;
+}
+
+
+node consoles consoles {
+	back -> root;
+	fwd -> console0;
+}
+
+node guest guest0 {
+	back -> guests;
+
+	/* hv code: an index below NGUESTS (res_guest.c:198). Also in T2-archive. */
+	resource_id		= 0;
+
+	/*
+	 * tod-offset, reset-reason, diagpriv, perfctrhtaccess and rngctlaccessible
+	 * are not set: the hypervisor takes 0 when they are absent (res_guest.c).
+	 * perfctraccess is not set either, and its default 0 is what is needed:
+	 * non-zero lets the guest reach performance-counter hypercalls that read
+	 * real T1 registers QEMU does not map, and the failed access traps inside
+	 * the hypervisor. `kstat -p dram:::` in the guest is enough to trigger it.
+	 * The counters cannot work here anyway.
+	 */
+
+	fwd -> vdevs0;
+	fwd -> chdevs0;
+	fwd -> cpu0;
+	fwd -> mblock0;
+
+	/* QEMU NIAGARA_MD_ROM_BASE (hw/sparc64/niagara.c): where QEMU loads 1up-md.bin. T1-archive: 1up.conf and 1g2p.hdesc have the same address. */
+	mdpa			= GUEST_MDPA;
+
+	/* QEMU NIAGARA_PROM_BASE + NIAGARA_OBP_OFFSET (0xfff0000000 + 0x80000, hw/sparc64/niagara.c): where QEMU loads openboot.bin. T1-archive: legion/common.hdesc ROMBASE is the same address. Also in T2-archive. */
+	rombase			= ROMBASE;
+	/* T1-archive: legion/common.hdesc ROMSIZE, 512k. QEMU's PROM region is 4 MiB (PROM_SIZE_MAX); openboot.bin is about 348 KB, so it fits. */
+	romsize			= ROMSIZE;
+	/* QEMU NIAGARA_VDISK_BASE (hw/sparc64/niagara.c): where QEMU maps the disk image. T1-archive: 1up.conf and 1g2p.hdesc have the same address. */
+	diskpa			= 0x1f40000000;
+
+
+	fwd -> console0;
+}
+
+node virtual_devices vdevs0 {
+	back -> guest0;
+	/* The guest MD's VDEV_HANDLE must agree (T1-archive: common.pdesc); a multiple of 64 below 0x800 (vdev_intr.h). Also in T2-archive. */
+	cfghandle	= 0x100;
+}
+
+/*
+ * Required even with no LDC: res_guest.c calls config_guest_channel_device()
+ * unconditionally and asserts on the cfghandle, so a guest without this node
+ * kills the hv before it prints anything. No ldc_endpoint nodes are needed.
+ */
+node channel_devices chdevs0 {
+	back -> guest0;
+	/* ours: T2-archive has 0x200. A multiple of 64; the channel range of MAX_LDC_INOS (512) lies above it (res_guest.c). */
+	cfghandle	= 0x300;
+}
+
+node cpu cpu0 {
+	back -> cpus;
+	back -> guest0;
+	/* T1-archive: legion/common.hdesc, CPU(n,...). Also in T2-archive. */
+	pid		= 0;
+	/* T1-archive: legion/common.hdesc, CPU(n,...). Also in T2-archive. */
+	vid		= 0;
+	/* hv code: an index below NVCPUS (res_vcpu.c:169). Also in T2-archive. */
+	resource_id	= 0;
+}
+
+/* The guest's memory. */
+node mblock mblock0 {
+	back -> memory;
+	back -> guest0;
+	/* QEMU NIAGARA_PARTITION_RAM_BASE (hw/sparc64/niagara.c): where QEMU maps the guest's RAM. T1-archive: 1up.hdesc GUEST(...) and 1up.conf (memory at 0x80000000) have it too. */
+	membase		= 0x80000000;
+	/* Same number as the guest MD's mblock size -- see md/legion/1up.pdesc. The
+	 * two descriptions of memory must agree; patching one only is the
+	 * single most common way to break a boot. */
+#ifndef MD_MEMSIZE
+#define MD_MEMSIZE 4096M
+#endif
+	/* ours (MD_MEM). */
+	memsize		= MD_MEMSIZE;
+	/* ours: equal to membase, the guest's real address is its physical address. T1-archive: 1up.hdesc GUEST(...) has 0x80000000 too. */
+	realbase	= 0x80000000;
+	/* hv code: res_memory.c:241. Also in T2-archive. */
+	resource_id	= 0;
+}
+
+node console console0 {
+	back -> consoles;
+	back -> guest0;
+	/* Required: the hv rejects a UART console with no ino. */
+	/* The guest MD's console ino must agree (T1-archive: common.pdesc); below 64 (res_console.c:277). Also in T2-archive. */
+	ino		= 0x11;
+	/* hv code: res_console.c:171. Also in T2-archive. */
+	resource_id	= 0;
+	/* QEMU NIAGARA_UART_BASE (hw/sparc64/niagara.c): where QEMU maps the UART. T1-archive: legion/common.hdesc PUART(0) and 1up.conf have the same address. */
+	uartbase	= PUART(0);
+}

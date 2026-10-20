@@ -1,0 +1,195 @@
+#!/bin/sh
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# The guards of the Makefile: what it refuses before it builds, and says why. No build, no QEMU, a few seconds; every case runs
+# `make -n` or `make config` in a small copy of the tree (the parse-time checks are what is tested).
+#
+#   tests/full/guards/run        or  make guards-verify
+#
+# Run under sh (dash, bash, and the Bourne shell of Solaris 10: no $( ), no test -e, no `!`).
+HERE=`cd \`dirname "$0"\` && pwd`
+SRC=`cd "$HERE/../../.." && pwd`
+T=${TMPDIR:-/tmp}/guards-test.$$
+mkdir "$T" || exit 2
+fail=0
+FAKE=
+cleanup() { if [ -n "$FAKE" ]; then kill "$FAKE" 2>/dev/null; fi; rm -rf "$T"; }
+trap cleanup 0
+
+ok()  { echo "ok  $1"; }
+bad() { echo "FAIL $1"; fail=1; }
+MK=make; if type gmake > /dev/null 2>&1; then MK=gmake; fi
+if $MK --version 2>&1 | grep GNU > /dev/null; then :; else echo "skip  guards: GNU make not found"; exit 3; fi
+# what an outer make leaves in the environment would change these makes
+unset MAKEFLAGS MFLAGS CONFIG_AUTO GATE_HERMETIC
+MAKELEVEL=0; export MAKELEVEL
+
+# refuses WHAT DIR ARGS...: make -n in DIR fails and says WHAT
+refuses() {
+    what=$1; d=$2; shift; shift
+    ( cd "$d" && $MK "$@" ) > "$T/out" 2>&1; rc=$?
+    if [ "$rc" != 0 ] && grep "$what" "$T/out" > /dev/null; then ok "refused: $what ($*)"
+    else bad "$what ($*): exit $rc: `head -3 "$T/out"`"; fi
+}
+accepts() {
+    d=$1; shift
+    ( cd "$d" && $MK "$@" ) > "$T/out" 2>&1; rc=$?
+    if [ "$rc" = 0 ]; then ok "accepted ($*)"; else bad "should work ($*): exit $rc: `head -3 "$T/out"`"; fi
+}
+
+# a small copy of the tree: what the Makefile reads when it is parsed
+mini() {
+    mkdir "$1" || exit 2
+    for e in `ls "$SRC"`; do
+        # not what ./configure left (config.auto.mk would say the copy has been moved), nor the sources and tests
+        case "$e" in src|tests|output|forth_bootstrap|config.auto.mk|config.status|config.log|config.wrap|autom4te.cache|.git) ;; *) cp -R "$SRC/$e" "$1/" ;; esac
+    done
+    mkdir "$1/forth_bootstrap"; cp "$SRC"/forth_bootstrap/*.mk "$1/forth_bootstrap/" 2>/dev/null
+}
+mini "$T/a"
+OUT=$T/out-d; W=$T/work-d
+
+# --- MD_MEM
+for v in abc 0 007 -5 2049.5 1234567890; do refuses "MD_MEM=" "$T/a" config MD_MEM=$v; done
+accepts "$T/a" config MD_MEM=2048
+( cd "$T/a" && $MK config MD_MEM=512 ) > "$T/out" 2>&1
+if grep "outside 1024..32768" "$T/out" > /dev/null; then ok "warned: MD_MEM=512 is outside the tested range"; else bad "no warning for MD_MEM=512"; fi
+
+# --- TOOLCHAIN and HV_UART take the values they are documented to take, not anything (a mistyped one was read as the other value)
+# (one value of each under Solaris, where every make is slow; all of them elsewhere)
+if [ "`uname -s`" = SunOS ]; then tcv="Gnu"; huv="true"; else tcv='Gnu bogus'; huv='true 1 YES on'; fi
+for v in $tcv; do refuses "TOOLCHAIN=" "$T/a" config TOOLCHAIN=$v; done
+for v in $huv; do refuses "HV_UART=" "$T/a" config HV_UART=$v; done
+if [ "`uname -s`" != SunOS ]; then   # an empty value is no value either
+    refuses "TOOLCHAIN=" "$T/a" config TOOLCHAIN=
+    refuses "HV_UART=" "$T/a" config HV_UART=
+fi
+accepts "$T/a" config HV_UART=yes
+accepts "$T/a" config HV_UART=no
+
+# --- `make help` prints the usage text (the Makefile treated it as a goal that needs no checks, but had no such target)
+( cd "$T/a" && $MK help OUTDIR="$T/help-out" WORKDIR="$T/help-w" ) > "$T/out" 2>&1; rc=$?
+if [ "$rc" = 0 ] && grep 'make hv_reset' "$T/out" > /dev/null; then ok "make help prints the usage"; else bad "make help: exit $rc: `head -3 "$T/out"`"; fi
+
+# --- a space in a path
+refuses "space or a tab" "$T/a" -n md OUTDIR="$T/out d" WORKDIR=$W
+refuses "space or a tab" "$T/a" -n md OUTDIR=$OUT WORKDIR="$T/work d"
+mini "$T/sp ace"
+refuses "space in it" "$T/sp ace" config
+
+# --- the tree moved or copied since ./configure
+printf 'CONFIGURED_SRC = %s\nCONFIGURED_BUILD = %s\n' "$T/a" "$T/a" > "$T/a/config.auto.mk"
+accepts "$T/a" config
+cp -R "$T/a" "$T/b"
+refuses "Moved or copied" "$T/b" config
+mv "$T/a" "$T/a2"
+refuses "Moved or copied" "$T/a2" config
+mv "$T/a2" "$T/a"
+rm -f "$T/a/config.auto.mk"
+accepts "$T/a" config
+
+# --- ./configure's docdir has the package name in it (config.auto.mk.in): else `make uninstall` empties README files of other packages
+# the file ./configure would write, with the values it gives by default (autoconf's own docdir string)
+sed -e 's|@prefix@|/usr/local|' -e 's|@datarootdir@|${prefix}/share|' -e 's|@datadir@|${datarootdir}|' \
+    -e 's|@docdir@|${datarootdir}/doc/${PACKAGE_TARNAME}|' -e 's|@PACKAGE_TARNAME@|sun4v-qemu-kit|' "$SRC/config.auto.mk.in" \
+    | grep -v '@' | grep -v '^CONFIGURED_' > "$T/docdir.mk"
+dd=`cd "$T/a" && $MK -s print-docdir CONFIG_AUTO="$T/docdir.mk" OUTDIR="$T/dd-out" WORKDIR="$T/dd-w" 2>&1`
+if [ "$dd" = /usr/local/share/doc/sun4v-qemu-kit ]; then ok "docdir from ./configure keeps the package directory"; else bad "docdir from ./configure is '$dd'"; fi
+
+# --- one OUTDIR, one machine
+# a set the gnu path would not wipe at parse time (build/toolchain-check.sh) needs its tool record first; the sun path has none
+mkdir "$T/set"
+( cd "$T/a" && $MK toolchain-record OUTDIR="$T/set" WORKDIR="$W" ) > /dev/null 2>&1 || true
+touch "$T/set/reset.bin" "$T/set/q.bin"
+printf 'legion|yes|no|2048|Sun Fire T2000 [1up-md.bin: legion, 2048MB]\n' > "$T/set/.md-signature"
+refuses "two machines" "$T/a" -n md TARGET=pci OUTDIR="$T/set" WORKDIR=$W
+refuses "two machines" "$T/a" -n obp TARGET=pci OUTDIR="$T/set" WORKDIR=$W
+accepts "$T/a" -n md TARGET=legion MD_MEM=1024 OUTDIR="$T/set" WORKDIR=$W
+refuses "was built as" "$T/a" -n install MD_MEM=1024 OUTDIR="$T/set" WORKDIR=$W
+accepts "$T/a" -n all TARGET=pci OUTDIR="$T/set" WORKDIR=$W
+
+# --- the wrong toolchain for the host
+if [ "`uname -s`" = SunOS ]; then wrong=gnu; said="needs the sparc64-linux-gnu"; else wrong=sun; said="builds on Solaris only"; fi
+refuses "$said" "$T/a" -n all TOOLCHAIN=$wrong OUTDIR=$OUT WORKDIR=$W
+refuses "checks the .gnu. path" "$T/a" -n md-verify TOOLCHAIN=sun
+accepts "$T/a" config TOOLCHAIN=$wrong
+
+# --- two makes in one OUTDIR: a live make holds the lock, a dead one does not
+# a stand-in for a running make: sleep under the name fakemake (lock.sh looks for "make" in the command name)
+for p in /usr/bin/sleep /bin/sleep; do if [ -f "$p" ]; then cp "$p" "$T/fakemake"; break; fi; done
+# a sleep that is one program of a multi-call binary (Ubuntu 26.04's coreutils) does not run under another name: a script then
+if "$T/fakemake" 0 < /dev/null > /dev/null 2>&1; then :; else printf '#!/bin/sh\nsleep "$1"\n' > "$T/fakemake"; chmod +x "$T/fakemake"; fi
+"$T/fakemake" 60 < /dev/null > /dev/null 2>&1 &
+FAKE=$!
+LOCK=`cd "$T/a" && $MK print-WORKDIR OUTDIR="$T/lk" WORKDIR="$T/lkw"`.lock
+echo "$FAKE" > "$LOCK"
+refuses "another make" "$T/a" -n md OUTDIR="$T/lk" WORKDIR="$T/lkw"
+# TARGET=all fans out to one make per configuration; those take no lock, so the top-level make must
+refuses "another make" "$T/a" -n md TARGET=all OUTDIR="$T/lk" WORKDIR="$T/lkw"
+kill "$FAKE" 2>/dev/null; wait "$FAKE" 2>/dev/null; FAKE=
+accepts "$T/a" -n md OUTDIR="$T/lk" WORKDIR="$T/lkw"
+accepts "$T/a" -n md TARGET=all OUTDIR="$T/lk" WORKDIR="$T/lkw"
+rm -f "$LOCK"
+
+# `clean` removes the lock of this make only when it is the goal itself: a bare `make` runs `all`, whose clean must keep it, or a
+# second make is let in. -pn prints the recipe of `clean` as the Makefile defines it for these goals.
+cleanlock() {   # cleanlock WANT DESCRIPTION [GOAL]
+    ( cd "$T/a" && $MK -pn $3 OUTDIR="$T/ck" WORKDIR="$T/ckw" ) 2> /dev/null | sed -n '/^clean:/,/^$/p' > "$T/rec"
+    if grep '\.lock' "$T/rec" > /dev/null; then got=yes; else got=no; fi
+    if [ "$got" = "$1" ]; then ok "$2"; else bad "$2: the recipe of clean removes the lock: $got, wanted $1"; fi
+}
+cleanlock no  "clean keeps the lock for a bare make"
+[ "`uname -s`" = SunOS ] || cleanlock no  "clean keeps the lock for make all" all     # -pn all takes half a minute under Solaris
+cleanlock yes "clean removes the lock for make clean" clean
+
+# The gates are hermetic: what ./configure recorded for TARGET and MD_MEM does not reach them (config.mk)
+printf 'CONFIGURED_SRC = %s\nCONFIGURED_BUILD = %s\nTARGET = pci\nMD_MEM = 1234\n' "$T/a" "$T/a" > "$T/a/config.auto.mk"
+if [ "`uname -s`" != SunOS ]; then   # the gates are of the gnu path; under Solaris a dry run of them starts sun-verify
+for g in test check md-verify-reference obp-test-external hv-verify; do
+    if ( cd "$T/a" && $MK -pn $g ) 2> /dev/null | awk '/^(TARGET|MD_MEM) *:*= *(pci|1234)/ {f=1} END {if (f) exit 0; exit 1}'; then bad "$g takes TARGET/MD_MEM from config.auto.mk"; else ok "$g ignores TARGET/MD_MEM of config.auto.mk"; fi
+done
+if ( cd "$T/a" && $MK -pn all ) 2> /dev/null | awk '/^(TARGET|MD_MEM) *:*= *(pci|1234)/ {f=1} END {if (f) exit 0; exit 1}'; then ok "all does take them (the control)"; else bad "all ignores config.auto.mk: the control of the test above is void"; fi
+fi
+rm -f "$T/a/config.auto.mk"
+
+# WORKDIR in a directory that is not there yet: the lock (a file next to WORKDIR) needs its directory, which the make then makes
+accepts "$T/a" workdir OUTDIR="$T/np-out" WORKDIR="$T/np/deeper/work"
+if [ -d "$T/np/deeper/work" ]; then ok "WORKDIR in directories that did not exist is made"; else bad "WORKDIR in a new directory was not made"; fi
+
+# A dry run (make -n) makes neither the work directory nor the lock
+( cd "$T/a" && $MK -n md OUTDIR="$T/dry" WORKDIR="$T/dryw" ) > /dev/null 2>&1
+if [ -d "$T/dryw" ] || [ -f "$T/dryw.lock" ] || [ -d "$T/dry" ]; then bad "make -n made the work directory, the lock or OUTDIR"; else ok "make -n makes no work directory, no lock, no OUTDIR"; fi
+# ... nor the signature file that hv_reset and obp stamp into OUTDIR (the next real build took it for a set built with unknown tools)
+( cd "$T/a" && $MK -n hv_reset OUTDIR="$T/dry2" WORKDIR="$T/dry2w" ) > /dev/null 2>&1
+if [ -f "$T/dry2/.md-signature" ] || [ -d "$T/dry2" ]; then bad "make -n hv_reset wrote into OUTDIR"; else ok "make -n hv_reset writes nothing into OUTDIR"; fi
+
+# A make that is refused has touched nothing: the toolchain check (it removes an OUTDIR built with other tools) comes after the lock.
+# And a goal that does not build into OUTDIR (install here) leaves it alone, whatever the tools. gnu path only: the sun path has no such check.
+if [ "`cd "$T/a" && $MK print-TOOLCHAIN 2>/dev/null`" != sun ]; then
+    mkdir -p "$T/keep" && echo x > "$T/keep/q.bin" && echo "built with other tools" > "$T/keep/.toolchain"
+    FAKE2=; "$T/fakemake" 60 < /dev/null > /dev/null 2>&1 & FAKE2=$!
+    KL=`cd "$T/a" && $MK print-WORKDIR OUTDIR="$T/keep" WORKDIR="$T/keepw"`
+    case "$KL" in /*) echo "$FAKE2" > "$KL.lock" ;; *) bad "no work directory name for the lock: $KL" ;; esac
+    ( cd "$T/a" && $MK md OUTDIR="$T/keep" WORKDIR="$T/keepw" ) > "$T/out" 2>&1
+    kill $FAKE2 2>/dev/null; wait $FAKE2 2>/dev/null
+    if [ -f "$T/keep/q.bin" ]; then ok "a refused make leaves OUTDIR alone"; else bad "a refused make removed OUTDIR"; fi
+    ( cd "$T/a" && $MK install OUTDIR="$T/keep" WORKDIR="$T/keepw" DESTDIR="$T/dest" ) > "$T/out" 2>&1
+    if [ -f "$T/keep/q.bin" ]; then ok "make install leaves OUTDIR alone"; else bad "make install removed OUTDIR"; fi
+fi
+# HV_PLATFORM and HV_VARIANT reach the gnu hypervisor build (it took ontario/legion whatever they said; the recipe shows what it passes)
+[ "`uname -s`" = SunOS ] || {
+    ( cd "$T/a" && $MK -n hv_reset HV_PLATFORM=huron HV_VARIANT=debug OUTDIR="$T/pv" WORKDIR="$T/pvw" ) 2> /dev/null | grep 'PLATFORM="huron" VARIANT="debug" sh build/hv_reset/gnu/build.sh' > /dev/null \
+        && ok "HV_PLATFORM and HV_VARIANT are passed to the gnu hv build" || bad "HV_PLATFORM/HV_VARIANT do not reach the gnu hv build"
+}
+# The makes build-obp.sh starts must not read -jN (no jobserver reaches them: "jobserver unavailable"); the recipe clears MAKEFLAGS for them
+[ "`uname -s`" = SunOS ] || {
+    ( cd "$T/a" && $MK -pn obp-gnu OUTDIR="$T/jb" WORKDIR="$T/jbw" ) 2> /dev/null | grep '^	MAKEFLAGS= ' > /dev/null \
+        && ok "obp-gnu clears MAKEFLAGS for the makes it starts" || bad "obp-gnu passes -jN on to its makes"
+}
+# TARGET=all runs its goals one after the other, whatever -j says
+[ "`uname -s`" = SunOS ] || {   # the dry run of TARGET=all is slow under Solaris
+    ( cd "$T/a" && $MK -pn TARGET=all OUTDIR="$T/pk" WORKDIR="$T/pkw" ) 2> /dev/null | grep '^\.NOTPARALLEL' > /dev/null && ok "TARGET=all is .NOTPARALLEL" || bad "TARGET=all is not .NOTPARALLEL"
+}
+
+if [ "$fail" = 0 ]; then echo "guards tests: all passed"; exit 0; fi
+echo "guards tests: FAILED"; exit 1

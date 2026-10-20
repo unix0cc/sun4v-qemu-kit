@@ -1,0 +1,58 @@
+Source patch for the GNU build layer only -- applies to os/unix/wrapper.c.
+
+Why: Solaris's sbrk() returns memory that is already executable (no W^X
+enforcement on the heap in this era). Linux enforces NX on brk-grown
+memory, and QEMU linux-user's own translation additionally checks
+PAGE_EXEC, so the dictionary -- entered as a function pointer immediately
+after being copied in (wrapper.c:614, "Call the Forth interpreter as a
+subroutine") -- SIGSEGVs on the first instruction fetch. Measured directly:
+a minimal reproducer under qemu-sparc64 linux-user showed sbrk-only memory
+faulting on execution, the same memory made executable via mprotect()
+running correctly.
+
+Fix: after the existing sbrk(), mprotect() the newly-grown region
+PROT_READ|PROT_WRITE|PROT_EXEC. Strictly additive -- legal and a no-op on a
+host where sbrk() memory is already RWX (Solaris), so one wrapper.c serves
+both toolchains with no #ifdef. Page-rounds down from the pre-sbrk break
+and up from the post-sbrk break; getmem()'s own alignment (32 KiB) is
+coarser than a page, so the mprotect'd range is always a superset of the
+returned dictionary region.
+
+--- a/os/unix/wrapper.c	2009-03-24 18:26:02.000000000 +0100
++++ b/os/unix/wrapper.c
+@@ -112,6 +112,7 @@
+ 
+ #include <signal.h>
+ 
++#include <sys/mman.h>
+ #include "wrapper.h"
+ #include "xref.h"
+ #include "defines.h"
+@@ -762,13 +763,27 @@
+ 	long size;
+ {
+ 	char *start;
++	char *prev_brk, *new_brk;
++	long pgsz, lo, hi;
+ 
++	prev_brk = (char *)sbrk(0);
+ 	start = (char *)sbrk(size+DICT_ORIGIN_ALIGNMENT+DICT_HEADER_SIZE);
+ 
+ 	if (start == (char *)-1) {
+ 		error("forth: couldn't get memory", "");
+ 		exit(1);
+ 	}
++
++	new_brk = (char *)sbrk(0);
++	pgsz = sysconf(_SC_PAGESIZE);
++	lo = (long)prev_brk & ~(pgsz - 1);
++	hi = ((long)new_brk + pgsz - 1) & ~(pgsz - 1);
++	if (mprotect((void *)lo, (size_t)(hi - lo),
++	    PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
++		error("forth: mprotect(PROT_EXEC) on dictionary memory failed", "");
++		exit(1);
++	}
++
+ 	return ((char *)((ulong_t)
+ 	    ROUNDUP(start+DICT_HEADER_SIZE, DICT_ORIGIN_ALIGNMENT)
+ 	    - DICT_HEADER_SIZE));

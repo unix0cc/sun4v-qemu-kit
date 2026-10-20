@@ -1,0 +1,13 @@
+# Sun's original OpenSPARC archives, as downloaded (file dates 2012-12-21). They are not part of this repository; the hashes
+# identify them. To check, from the directory holding the archives:
+#   grep -v '^#' <this file> | sha256sum -c
+# The reference trees the md tests read (sun-t1-sources.sha256, sun-t1-binaries.sha256, PRISTINE-MANIFEST) were unpacked from these.
+# Source URLs:
+#   OpenSPARCT1.1.7.tar.bz2        http://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1.1.7.tar.bz2
+#   OpenSPARCT1_Arch.1.5.tar.bz2   http://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2
+#   OpenSPARCT2_Arch.1.2.tar.bz2   https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT2_Arch.1.2.tar.bz2
+# The URLs were not re-fetched when this was written (2026-10); the hashes below are those of the files actually used.
+# size: 255790781, 198858700, 373795542 bytes.
+6a966b2d5f06665c3cf26f0559c1a8cb1467887492356d2d1482312a04d04451  OpenSPARCT1.1.7.tar.bz2
+833b086196e29eca296dd4722b1a2e853c2c8228634106ce71d59b48192518e9  OpenSPARCT1_Arch.1.5.tar.bz2
+a60addead7f79afe6093243c5dd43b536ab51035bba5b27b54c08619c1e78993  OpenSPARCT2_Arch.1.2.tar.bz2

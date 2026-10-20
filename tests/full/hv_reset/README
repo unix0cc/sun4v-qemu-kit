@@ -1,0 +1,57 @@
+tests/full/hv_reset -- the hypervisor (q.bin / reset.bin) gate, GNU path
+========================================================================
+
+Checks on the GNU-built hypervisor that need no Sun build, no Solaris host and
+no QEMU:
+
+    make hv-verify        build once (ontario/legion by default), run all;
+                          about 10 s
+
+They exist because build/hv_reset/gnu/build.sh is a port, and GNU as does not
+always mean by a source what Sun as means. Each test is the cheapest check that
+would have caught a difference found by comparing a GNU build with a build by
+Sun's toolchain, function by function.
+
+Layout
+------
+    run                     runs internal/*.sh in order, stops at the first
+                            failure
+    internal/
+      no-asm-warnings.sh    the build has no `Warning:` and no failed file.
+                            The build script hides stderr; lib/build.sh runs
+                            the same script with it visible. Catches
+                            `set <negative>` (GNU sign-extends, Sun
+                            zero-extends).
+      setx-rd-pc.sh         every `setx <label>` followed by `rd %pc`
+                            relocates to that rd's own address. Catches
+                            `setx .+8` (GNU takes `.` at the start of the
+                            six-instruction expansion, Sun at the end).
+      offsets-cross-check.sh
+                            offsets.h computed two independent ways agrees
+                            (the build's DWARF reader, and lib/genoffsets.py
+                            where gcc evaluates offsetof/sizeof itself), and
+                            for ontario/legion offsets.h and offsets.chk are
+                            byte-identical to the Sun-made gnu/reference/.
+                            Catches a DWARF reader that misreads a layout.
+    lib/build.sh            the shared build, stderr visible; reused if OUTDIR
+                            already holds one
+    lib/genoffsets.py       the second, independent computation of offsets.h
+                            (the build no longer uses it)
+
+What this does NOT cover
+------------------------
+Only ontario/legion is meant to pass: the release and debug variants do not
+link under the GNU path (with CONFIG_FIRE/PCIE, -traditional-cpp rejects macros
+in vpci_errs.h), so `make hv-verify PLATFORM=ontario VARIANT=release` fails in
+the build, not in a test (on the command line: set in the environment, the value is
+overridden by build/hv_reset/options.mk and the legion build runs instead). Nothing here compares against Sun's output, the C
+half (gcc vs Sun cc), the link layout, or run-time behaviour. The full
+comparison needs a build with Sun's toolchain; the tools for it are not in this
+repository.
+
+Adding a test
+-------------
+Drop an executable internal/<name>.sh that builds through lib/build.sh, exits
+non-zero on failure, and prints one `ok:` line on success; add the name to
+ORDER in `run`. Say in its header what it catches, and show it failing on a
+tree that has the defect -- otherwise nobody knows it can.

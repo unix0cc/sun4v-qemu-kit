@@ -1,0 +1,101 @@
+offsets.h and offsets.chk from DWARF
+====================================
+
+What the original does
+----------------------
+The hypervisor's assembler sources need the byte offsets of C struct members,
+and `offsets.in` says which. Sun's makefiles (greatlakes/ontario and huron,
+Makefile.platform) make two files from it, both through Sun's own `stabs` tool:
+
+    cc -xdebugformat=stabs -g -S -o offsets-n1.s offsets-n1.c
+           (offsets-n1.c = the #include lines of offsets.in)
+    stabs -t genassym -m lp64 offsets.tmp < offsets-n1.s > offsets.h
+           #defines for the .s files
+    stabs -t asmcheck -m lp64 offsets.tmp < offsets-n1.s > offsets.chk
+           what `aschk` checks every .s access against
+
+`q` depends on `chkasm`, so both files are on the path to q.bin. `stabs` (built
+from support/stabs) reads the debug info of types as stabs, and nothing else.
+
+The compilers
+-------------
+`-xdebugformat=stabs` per each compiler's own C User's Guide (docs.oracle.com),
+and what we ran (every Studio of build_matrix, section 5):
+
+- Sun Studio 11 to Oracle Developer Studio 12.5 (`cc` 5.8 to 5.14): the guide
+  lists `-xdebugformat=[stabs|dwarf]`, and the probe counts `.stabs` lines
+  in the output (build_matrix, section 5). All write stabs, so the original
+  rules run unchanged and `stabs` is used. From Sun Studio 12 (`cc` 5.9) on,
+  dwarf is the default, which is why Sun's Makefile.platform asks for
+  `-xdebugformat=stabs` explicitly.
+- Oracle Developer Studio 12.6 (`cc` 5.15, 2017): the option is
+  `-xdebugformat=dwarf` only, "the default and obsolete option" (guide), and
+  cc(1) on the machine says the same. `stabs` is ignored with a warning. The
+  old rule yields an empty offsets.h ("Can't find md_header ...") and
+  traptable.s no longer assembles.
+- gcc: no `-gstabs` since GCC 12.
+
+So the break is at 12.6. 12.5 and 12.6 need VIS declared on the guest to
+start. 12.2 and later need `-xbuiltin=%none` (their -fast output calls
+_memcpy/_memset), 12.2 also `-xdepend=no`; 11, 12.0 and 12.1 need neither.
+./configure probes both facts (README.configure).
+
+The only format left is DWARF. It holds the same layout, with two differences
+that matter: a struct is described only if something refers to it (cc(1),
+-xdebuginfo `tagtype`), and `offsets-n1.c` is nothing but #includes; and
+arrays, bit fields and member locations are spelled differently by each
+producer.
+
+What we got
+-----------
+- `dwarf2genassym.pl` -- reads a DWARF text dump (Developer Studio 12.6
+  `dwarfdump`, or gcc's `readelf --debug-dump=info`; detected) and prints what
+  `stabs -t genassym` / `-t asmcheck` print, same `offsets.in` language and
+  same quirks (for instance: a struct with no member list yields all its
+  members, upper-cased; that is where the HDNAME_* come from). Its `stub`
+  mode writes the variables that make the compiler emit every type offsets.in
+  names. Perl 5.8 and later, core only.
+- `offsets-dwarf.sh` -- the pipeline around it, the same for both toolchains:
+  #includes -> preprocess -> stub -> `cc -g -c` -> dump ->
+  `dwarf2genassym.pl gen`. Options in its header.
+
+Where it is used
+----------------
+- gnu path: `gnu/build-offsets.sh`. It also checks the result against
+  gnu/reference/, and tests/full/hv_reset/internal/offsets-cross-check.sh
+  computes the same values a second, independent way
+  (tests/full/hv_reset/lib/genoffsets.py: gcc evaluates offsetof/sizeof
+  markers, no debug info read) and compares.
+- sun path: build/hv_reset.mk probes whether the cc writes stabs. Sun Studio
+  11 does, and is built exactly as before. For Developer Studio 12.6 it applies
+  patches/hv/hv-ds12-offsets-dwarf.patch (the two rules call offsets-dwarf.sh)
+  and gives cc `-xbuiltin=%none` (otherwise -xO3 emits _memcpy/_memset calls;
+  the hypervisor has no libc).
+
+Result (ontario/legion)
+-----------------------
+- offsets.h and offsets.chk from Developer Studio 12.6 and from gcc are
+  byte-identical to the ones Sun Studio 11 and `stabs` make
+  (gnu/reference/offsets.ontario-legion.{h,chk}), nothing supplemented. Both
+  tools warn "Can't find snet_info" (offsets.in names it, no included header
+  defines it).
+- gnu path: q.bin and reset.bin are identical to those built with the earlier
+  route (genoffsets.py, inline-asm markers plus names copied from the
+  reference), now the cross-check test.
+- sun path, plain `gmake hv_reset SUN_STUDIO=...`, nothing done by hand:
+    Developer Studio 12.6   the probe sees no stabs, `stabs` is not run,
+                            offsets.h/offsets.chk come from DWARF; reset.bin
+                            is identical to Sun Studio 11's; q.bin boots to
+                            the OpenBoot ok prompt (tests/smoke)
+    Sun Studio 11           unchanged: `stabs` runs as before; reset.bin is
+                            identical to the build before this change; q.bin
+                            differs only in the directory name in the build
+                            path
+
+Limits
+------
+- Compile flags are word-split, not shell-parsed; the current -D sets have no
+  quoting.
+- Not run: huron (only ontario's Makefile.platform is patched; huron's rules
+  are the same). Every Studio of build_matrix builds the legion set and boots
+  it to the OpenBoot ok prompt (tests/smoke).

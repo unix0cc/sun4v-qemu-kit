@@ -1,0 +1,83 @@
+tests/full/boot -- the boot gate (legion, OpenBoot level)
+=========================================================
+
+    make boot-verify             or  tests/full/boot/run
+                                 about 1-2 minutes, mostly the firmware build
+    tests/full/boot/run --update
+                                 rewrite expected/legion.obp after an intended
+                                 change (review the diff)
+    tests/full/boot/run selftest
+                                 prove the detector: a hv MD without
+                                 channel_devices must give "no ok prompt"
+
+What it does: builds legion's complete firmware set from this tree
+(`make all TARGET=legion`: hv, reset, OpenBoot and both MDs), boots it to
+the OpenBoot `ok` prompt under QEMU, and talks to OpenBoot there: `.version`,
+`show-devs`, and `dev <path> .properties` for every node (183 lines, 21
+devices). The text goes into expected/legion.obp. Solaris is not booted here
+(tests/full/login boots it to the login prompt). It also checks that QEMU
+loaded all six firmware files from the set just built: a stray openboot.bin
+in the cwd or in another -L directory wins the search silently.
+
+Cross-check and the list of what OpenBoot does not show
+-------------------------------------------------------
+(lib/obpcross.py; tests/full/md/lib/mdparse.py reads the MD)
+
+The snapshot alone only says "OpenBoot shows what it showed". The cross-check
+reads the guest MD the firmware was built with and verifies, node by node,
+that what OpenBoot shows is what the MD says: /aliases = the MD devalias node
+(both ways), /cpu@0 clock-frequency and compatible = the MD cpu node,
+/memory@m0,<base> reg = the MD mblock base and size,
+/virtual-devices@<cfg-handle> and each child (name, unit address = cfg-handle,
+device-type, compatible; `interrupts` = intr when intr != 0), /options = the
+MD `variables` node, and in the banner: banner-name, Host ID = hostid,
+Ethernet address = mac-address, "<n> MB memory" = mblock size. Any
+disagreement fails the boot test. The mappings are the ones measured on
+legion, not assumed: the first version assumed `interrupts` = intr and the run
+showed disk and rtc with interrupts 1 where the MD says intr 0 (OpenBoot's own
+doing; nvram shows none).
+
+expected/legion.surface lists EVERY guest-MD property (49 on legion), `+` if
+OpenBoot was verified to carry it in the tree or the banner (32) and `-` if
+nothing there carries it (17), with "[the value appears in the tree]" on a `-`
+line whose value shows up under another name. `-` means "OpenBoot does not
+surface this": Solaris may read it from the MD itself (cpu isalist, mmu-*,
+platform max-cpus), or nothing reads it. It is not a defect list. Drift in it
+is a WARNING, not a failure; `run --update` rewrites it.
+
+Findings from the first run: the MD `options` node (input-device,
+output-device, use-nvramrc?) was not surfaced at all while `variables` was
+(now input-device and output-device are in `variables`, the node `options` is
+gone); the banner's `Serial #` is not the MD serial# (0xab4130) but
+hostid & 0xffffff in decimal (1122867 = 0x112233), so platform serial# is read
+by nothing OpenBoot shows.
+
+Why: tests/full/md says the MD is well formed and reproducible; only a boot
+says that hv, OpenBoot and the MD accept each other and what a guest is then
+shown. A hypervisor that dies on a bad MD prints nothing at all, so "no ok
+prompt" is the signal, and the snapshot turns an MD edit into a diff in
+OpenBoot terms (a changed property, a node that vanished).
+
+QEMU: the distribution package qemu-system-sparc (8.2.2 on Ubuntu 24.04), see
+REQUIREMENTS.LINUX. Without it the test stops and says what to install
+(tests/lib/qemu.sh). QEMU=<path> uses another binary. The version, path and
+sha256 of the QEMU used are printed first.
+
+Only legion is tested: the pci configurations need a QEMU with vpci and cmd646,
+which upstream does not have yet.
+
+Console: a unix socket read without blocking, every wait has a timeout,
+OpenBoot's pager (`More [<space>,<cr>,q,n,p,c] ?`) is answered with a space.
+On failure the last console lines and the log land in OUTDIR. Content
+differences are never retried; a missing prompt is retried (ATTEMPTS, default
+3), and a pass on a later attempt is reported with a warning. (OpenBoot's
+loader flake, `Last Trap: Level 14`, shows up when a guest is booted, see
+tests/full/login; this gate boots none.)
+
+Normalised before comparing (they change with the build, not with the
+machine): the `[ sun4v-qemu-kit <date> git ... ]` stamp, the `created` date,
+the build time in /openprom `version`, and /memory `available` (the free
+list).
+
+Not covered: Solaris (see tests/full/login); the pci configurations; anything
+a guest does after the prompt.

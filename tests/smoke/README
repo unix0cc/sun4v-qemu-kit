@@ -1,0 +1,31 @@
+tests/smoke -- the shortest check
+=================================
+
+    make test                    build legion's firmware set from this tree
+                                 (cached by a hash of the tree: an unchanged
+                                 tree is not rebuilt), then the check below
+    tests/smoke/run FWDIR        the check alone on a set you already have
+                                 (FWDIR from `make all TARGET=legion`, or
+                                 any directory with reset.bin q.bin openboot.bin
+                                 nvram1 1up-md.bin 1up-hv.bin)
+    make test-full               test + everything in tests/full (the
+                                 maintainer's full set); `make tests-full` is
+                                 the same
+
+It boots the set under QEMU and requires two things in the console output: the
+banner ("Sun Fire T2000") and, after it, OpenBoot's `ok` prompt as the last
+non-empty line. That is all. The banner header (name and memory, copyright,
+OpenBoot version, Ethernet address, Host ID) is printed for a human but not
+compared: a changed version or serial would only give a red test nobody can
+judge. What the banner says is checked against the MD in tests/full/boot
+(`make boot-verify`), together with the device tree and its properties.
+About 1.5 seconds once the firmware exists.
+
+A hypervisor that rejects its MD prints nothing at all, so "no banner" is the
+failure you see when the MD, hv and OpenBoot do not fit together; a banner
+without the ok prompt means OpenBoot started and did not finish. What it does
+not say: which configuration it was (any of them prints "Sun Fire T2000"),
+which OpenBoot build, or anything about the tree, properties or Solaris.
+
+Needs qemu-system-sparc from the distribution (`apt install
+qemu-system-sparc`, REQUIREMENTS.LINUX), or run it in a container (container/).

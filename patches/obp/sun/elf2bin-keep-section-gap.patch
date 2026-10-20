@@ -1,0 +1,51 @@
+elf2bin: keep the gap between sections, whatever address the first one has.
+
+"base == 0" doubled as "no base yet", so an image linked at address 0 (reset.elf is)
+re-took its base from the SECOND section with data, and the gap between .text and
+.data was then not padded but taken for a new start (pad underflows past 0x1000):
+.data landed at the end of .text, where the code, linked for the aligned address,
+does not look for it. Sun Studio 11's decomp.o had a 4-aligned .data straight after
+.text and never showed it; Developer Studio 12.6's is 8-aligned and after a text of
+1860 bytes leaves a gap of 4. decompress() then compared the stream's first byte with
+the wrong byte, took its error path (*(short *)1 = 1) and the PROM printed nothing.
+
+Also counts the padding in `size`, and pads by bytes (sizeof(long) can be 8 and the
+gap not a multiple of it). Build-tree only, never src/obp.
+
+--- a/tools/elf2bin.c	2026-10-01 19:14:29.392503969 +0200
++++ b/tools/elf2bin.c	2026-10-01 19:14:29.404503999 +0200
+@@ -125,6 +125,7 @@
+ 	    /* process the file ... */
+ 	    unsigned int size = 0;
+ 	    unsigned int base = 0;
++	    int have_base = 0;
+ 	    Elf_Scn *scn = 0;
+ 
+ 	    while ((scn = elf_nextscn(elf, scn)) != 0) {
+@@ -142,7 +143,10 @@
+ 		    } else {
+ 			if (debug) dump_data(data);
+ 
+-			if (base == 0) base = shdr->sh_addr;
++			if (!have_base) {
++			    base = shdr->sh_addr;
++			    have_base = 1;
++			}
+ 
+ 			if ((shdr->sh_type == SHT_PROGBITS) &&
+ 			    ((shdr->sh_flags & SHF_ALLOC) == SHF_ALLOC)) {
+@@ -153,10 +157,11 @@
+ 				    base = shdr->sh_addr;
+ 				    size = 0;
+ 				} else {
++				    size += pad;
+ 				    while (pad) {
+-					long b = 0;
+-					write(ofd, &b, sizeof(long));
+-					pad -= sizeof(long);
++					char b = 0;
++					write(ofd, &b, 1);
++					pad--;
+ 				    }
+ 				}
+ 			    }

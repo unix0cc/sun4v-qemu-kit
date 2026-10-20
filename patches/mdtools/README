@@ -1,0 +1,11 @@
+Both patches are applied by build/mdtools.mk (TOOLCHAIN=gnu only) to a
+throwaway copy of src/hypervisor/src/support. The Sun toolchain builds
+mdgen/mdlint unmodified and uses neither.
+
+gnu/mdgen-mdlint-host-endian.patch
+    Gives the network-byte-order macros a little-endian arm and adds one
+    hton64() Sun forgot.
+
+gnu/mdgen-mdlint-printf-int64.patch
+    PRIx64/PRId64 for uint64_t in the --text/--dot writers. No output
+    change.

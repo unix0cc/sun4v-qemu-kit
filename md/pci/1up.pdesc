@@ -1,0 +1,311 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Modified 2026 for sun4v-qemu-kit (see git log). Modifications Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file */
+/*
+* ========== Copyright Header Begin ==========================================
+* 
+* OpenSPARC T1 Processor File: 1up.pdesc
+* Copyright (c) 2006 Sun Microsystems, Inc.  All Rights Reserved.
+* DO NOT ALTER OR REMOVE COPYRIGHT NOTICES.
+* 
+* The above named program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public
+* License version 2 as published by the Free Software Foundation.
+* 
+* The above named program is distributed in the hope that it will be 
+* useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+* General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public
+* License along with this work; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+* 
+* ========== Copyright Header End ============================================
+*/
+/*
+ * Copyright 2005 Sun Microsystems, Inc.  All rights reserved.
+ * Use is subject to license terms.
+ *
+ * ident	"@(#)1up.pdesc	1.6	05/08/29 SMI"
+ */
+
+/*
+ * The pci machine: PCIe root complex, e1000 (bound by the Ophir FCode in
+ * src/obp) and a cmd646 IDE controller. Neither needs a vendor FCode ROM.
+ *
+ * probe-list is "0,1,2": e1000 at device 0, IDE at device 2. Device 1 is a
+ * spare slot -- declared with its own imentry1 (ino 0x15) so a second PCI
+ * device can be added without touching the interrupt map. See md/pci/README,
+ * md/README.
+ */
+
+#include "../common.pdesc"
+
+ADD_CPU(0)
+
+/* Guest RAM. Must match QEMU's -m; nothing diagnoses a disagreement. */
+#ifndef MD_MEMSIZE
+#define MD_MEMSIZE 4096M
+#endif
+node mblock p0_memlist0 {
+	back -> memory;
+	base = 0x0000000080000000;
+	size = MD_MEMSIZE;
+}
+
+node memory memory {
+	fwd -> p0_memlist0;
+	back -> root;
+}
+
+node cpus cpus {
+	fwd -> cpu0;
+	back -> root;
+}
+
+node cache cache {
+	back -> cpu0;
+}
+
+node tlb tlb {
+	back -> cpu0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The PCIe root complex and its interrupt map.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * PCIe root complex. OBP probes each fwd arc of `phys_io`; a child with
+ * device-type "pciex" becomes /pci@<cfg-handle>. Needs an OBP with the
+ * sun4v-vpci dropin -- see config.mk.
+ *
+ * Values from Sun's 1c1t_guest.desc. In { }, integers are emitted big-endian
+ * with leading zeros DISCARDED, so fixed-width cells are written byte by byte.
+ */
+node phys_io physio {
+	back -> root;
+	fwd -> pci_bus;
+}
+
+node iodevice pci_bus {
+	back -> physio;
+	disabled  = 0x0;
+	device-type  = "pciex";
+	compatible  = { "SUNW,sun4v-pci" };
+	cfg-handle  = 0x0;
+	address-ranges  = { 0x00 , 0x00 , 0x00 , 0xc8 , 0x10 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x10 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0xca , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x7f , 0xff , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0xcc , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0xff , 0xff , 0x00 , 0x00 };
+	virtual-dma  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x80 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x80 , 0x00 , 0x00 , 0x00 };
+	probe-list  = "0,1,2";
+	msi-address-ranges  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x7f , 0xff , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x01 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0x00 , 0x00 , 0x00 , 0x00 , 0xff , 0xff , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x01 , 0x00 , 0x00 };
+	#msi  = 0x100;
+	msi-data-mask  = 0xff;
+	msi-ranges  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x01 , 0x00 };
+	msi-eq-size  = 0x80;
+	msix-data-width  = 0x20;
+	#msi-eqs  = 0x24;
+	msi-eq-to-devino  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x24 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x18 };
+	interrupts  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x3f , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x3e };
+	#interrupt-cells  = 0x1;
+	interrupt-map-mask  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0xff , 0xf8 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x07 };
+	/*
+	 * Bus 0: this machine has no PCIe switch ahead of the devices.
+	 *
+	 * The mask MUST keep all five device-number bits of phys.hi (0xff_f8,
+	 * not 0xff_f0). Solaris masks the device's `reg` with it and compares
+	 * against child-unit-address; drop the low bit and two adjacent slots
+	 * match the same entry, so one device's interrupts go to an ino nobody
+	 * listens on and its driver times out. Node format: FWARC 2007/386,
+	 * https://sun4v.github.io/ARChive/FWARC/2007/386/
+	 *
+	 * One entry per slot: both devices hardwire INTA. A device asserting
+	 * INTB..INTD needs its own entry -- there is no fallback and no warning.
+	 * The guest MD must stay under 8 KB or it is truncated silently.
+	 */
+	bus-ranges  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0xff };
+	fwd -> imentry0;
+	fwd -> imentry1;
+	fwd -> imentry2;
+}
+
+/*
+ * No pci-network iodevice node for the e1000. The Ophir FCode, under
+ * patches/obp/forth/ophir-skip-eeprom-mac-sync.patch, reads the NIC's MAC from
+ * RAL0/RAH0 -- which QEMU loads from the EEPROM it synthesises from
+ * -device e1000,mac= -- and publishes it as local-mac-address. So the
+ * command-line mac= is the single source of truth and no MAC lives here.
+ * ("WARNING: /pci@0/network: Missing network-vpd MD node" no longer
+ * prints either: that branch of the FCode is not taken.)
+ *
+ * A pci-network node with a mac-addresses property is what OBP reads
+ * for a fixed per-port MAC
+ * (src/obp/obp/arch/sun4v/md-iodevice-props.fth); a second emulated NIC
+ * that needed one could add such a node (a new PCI device number plus
+ * its own imentry) -- but it would then also need
+ * patches/obp/forth/md-iodevice-reg-guard.patch back in the loop.
+ */
+
+node interrupt-map-entry imentry0 {
+	back -> pci_bus;
+	/* e1000 (addr=0x0), INTA -> ino 0x14 */
+	child-unit-address  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 };
+	child-interrupt  = 0x1;
+	parent-interrupt  = 0x14;
+	parent-device-path  = "/pci@0";
+}
+
+node interrupt-map-entry imentry1 {
+	back -> pci_bus;
+	/* device 1: spare slot, INTA -> ino 0x15 */
+	child-unit-address  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x08 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 };
+	child-interrupt  = 0x1;
+	parent-interrupt  = 0x15;
+	parent-device-path  = "/pci@0";
+}
+
+node interrupt-map-entry imentry2 {
+	back -> pci_bus;
+	/* cmd646 IDE (addr=0x2), INTA -> ino 0x16 */
+	child-unit-address  = { 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x10 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 , 0x00 };
+	child-interrupt  = 0x1;
+	parent-interrupt  = 0x16;
+	parent-device-path  = "/pci@0";
+}
+
+/*
+ * T2 OBP reads its configuration from here. Every node needs its back arc, or
+ * OBP never sees it. The older node `options` is not read by this OBP.
+ */
+node openboot XXopenboot {
+     back -> root;
+     fwd -> XXvariables;
+     fwd -> XXdevalias;
+}
+
+node variables XXvariables {
+     back -> XXopenboot;
+     fcode-debug? = "true";
+     /* Ordered: OBP boots the first entry that answers. */
+     boot-device = "disk disk0 cdrom";
+     input-device = "ttya";
+     output-device = "ttya";
+     /*
+      * "true" boots unattended. "false" stops at ok, where the flags are
+      * `boot`, `boot -v`, `boot -kv` (kmdb resident) or `boot -kd`.
+      */
+     auto-boot? = "false";
+}
+
+node devalias XXdevalias {
+     back -> XXopenboot;
+     /*
+      * probe-list is "0,1,2": e1000 at device 0, a cmd646 IDE controller at
+      * device 2. Device 1 is a spare slot (imentry1 routes its ino 0x15).
+      *
+      * `network@0`, not `ethernet@0`: with an FCode ROM attached
+      * (-device e1000,romfile=...) the Ophir driver binds and renames it.
+      * Without the ROM it stays `ethernet@0` and this alias will not resolve.
+      */
+     net = "/pci@0/network@0";
+     /*
+      * The IDE units. idecd needs the ,0 lun or PACKET commands for the slave
+      * go to the master. QEMU: -device cmd646-ide,addr=0x2, with ide-hd on
+      * bus=ide0.0,unit=0 -> disk@0 and ide-cd on unit=1 -> cdrom@1.
+      * No Legion disk on this machine, so no `vdisk`.
+      */
+     disk  = "/pci@0/ide@2/disk@0";
+     disk0 = "/pci@0/ide@2/disk@0";
+     cdrom = "/pci@0/ide@2/cdrom@1,0";
+     nvram = "/virtual-devices/nvram@5";
+     ttya = "/virtual-devices/console@1";
+     ttyb = "/virtual-devices/console@4";
+     /* Which MD this firmware was built from. Not a device path. */
+#ifndef MD_TYPE
+#define MD_TYPE "unknown"
+#endif
+     md-type = MD_TYPE;
+}
+
+/* content-version is a string here; the hv MD uses a u64. T2 OBP needs both. */
+node root root {
+	content-version = "1.0";
+	reset-reason = 0;			   // power-on
+	fwd -> XXopenboot;
+	fwd -> platform_data;
+	fwd -> vdev;
+	fwd -> memory;
+	fwd -> cpus;
+	fwd -> physio;
+}
+
+node platform platform_data {
+     back -> root;
+     /* The name the boot banner prints. */
+#ifndef BANNER_NAME
+#define BANNER_NAME "Sun Fire T2000"
+#endif
+     banner-name = BANNER_NAME;
+     name = "SUNW,Sun-Fire-T2000";
+     mac-address = 0x525400660020;      // 52:54:00:66:00:20 -- the platform
+                                        // (idprom) MAC. On real hardware this
+                                        // is the chassis address, distinct
+                                        // from any NIC's. Kept equal to the
+                                        // e1000's -device mac= so the boot
+                                        // banner's "Ethernet address" line and
+                                        // the interface's local-mac-address
+                                        // (now read from the chip) agree.
+     hostid = 0x80112233;
+     serial# = 11223344;
+     /* Must be what QEMU ticks (hw/sparc64/sparc64.c). Solaris derives all
+        its time from this: a wrong value makes the guest clock run wrong. */
+     stick-frequency = 100000000;
+     clock-frequency = 5000000;
+     /* Required: T2 OBP aborts without it. */
+     max-cpus = 0x20;
+}
+
+
+/* `name` is required, or /virtual-devices/console does not resolve. */
+node virtual-devices vdev {
+    name = "virtual-devices";
+    device-type = "virtual-devices";
+    /* Must be a list: a bare string is stored as a type probe.fth ignores. */
+    compatible = { "SUNW,sun4v-virtual-devices" };
+    cfg-handle = VDEV_HANDLE;
+    /* Both directions needed: OBP enumerates children by their fwd arcs. */
+    back -> root;
+    fwd -> console;
+    fwd -> nvram;
+    fwd -> tod;
+}
+
+
+node virtual-device console {
+	back -> vdev;
+	name = "console";
+	ino = 0x11;
+	/*
+	 * "qcn" MUST come first. Solaris binds on the first match, and only
+	 * that name makes it poll the console instead of waiting for an
+	 * interrupt this hv never delivers. Do not reorder.
+	 */
+	compatible = { "qcn", "SUNW,sun4v-console" };
+	cfg-handle = 0x1;
+}
+
+node virtual-device nvram {
+	back -> vdev;
+	name = "nvram";
+	ino = 0;
+	cfg-handle = 0x2;
+}
+
+node virtual-device tod {
+	back -> vdev;
+	name = "rtc";
+	ino = 0;
+	cfg-handle = 0x3;
+	compatible = "sun4v-tod";
+}

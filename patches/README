@@ -1,0 +1,110 @@
+patches/ -- source overlays applied at build time
+=================================================
+
+One subdirectory per component, one .patch per change. The patches never touch
+src/: the build applies them with `patch -p1` to a throwaway copy of the
+source. The prose above each diff says what the change is and why it is
+carried here rather than upstream.
+
+The directory says which toolchain applies a patch:
+
+    patches/<component>/        both toolchains (the hv/ patches name their
+                                path below); changes the product
+    patches/<component>/gnu/    gnu path only; changes nothing in the product
+                                (verified byte for byte, tests/full/obp/TESTS)
+                                and exists so Sun's sources build on a
+                                GNU/Linux host at all
+    patches/<component>/sun/    sun path only
+
+The components:
+
+    patches/obp/forth/    Forth/FCode source, applied by build/obp.mk (sun
+                          path) and build/obp/gnu/obp-gnu.mk (gnu path) to a
+                          copy of src/obp
+    patches/obp/gnu/      C source of the Forth engine and the OBMD host
+                          tools, applied by build/obp/gnu/engine/Makefile
+    patches/obp/sun/      the sun path's build tree, applied by build/obp.mk
+    patches/hv/           applied by build/hv_reset.mk (and, on the gnu path,
+                          build/hv_reset/gnu/build.sh) to a copy of
+                          src/hypervisor
+    patches/mdtools/gnu/  applied by build/mdtools.mk to a copy of the
+                          mdgen/mdlint sources
+
+To add one: write the diff, drop it in the right subdirectory, and name it where that component applies its patches; the order
+there is the apply order:
+    patches/hv/           a `$(PATCH) ... -i` line in build/hv_reset.mk, and the same patch in build/hv_reset/gnu/build.sh
+    patches/obp/forth/    a `$(PATCH) ... -i` line in build/obp.mk (sun path) and the OBP_PATCHES list in build/obp/gnu/obp-gnu.mk (gnu path)
+    patches/obp/sun/      a `$(PATCH) ... -i` line in build/obp.mk
+    patches/obp/gnu/      the engine's own build, build/obp/gnu/engine/Makefile
+    patches/mdtools/gnu/  the call of build/mdtools/gnu/build.sh in build/mdtools.mk
+
+
+The patches
+-----------
+Path relative to patches/, then what it does. Rationale is in each file's
+header.
+
+    hv/hv-pcie-ra-segments.patch                        both paths
+        Enable the hypervisor's generic RA->PA I/O-segment tier for the
+        guest's QEMU-emulated PCIe window.
+
+    hv/hv-sun-strip-debug.patch                         sun path
+        Drop Sun cc's debug stubs from the objects before the link, so that
+        q.bin does not carry the build directory.
+
+    hv/hv-ds12-offsets-dwarf.patch                      sun path, when the cc
+        Make offsets.h and offsets.chk from DWARF, for a cc that writes no
+        stabs (Oracle Developer Studio 12.6). See build/hv_reset/README.dwarf.
+
+    mdtools/gnu/mdgen-mdlint-host-endian.patch
+        Give mdgen/mdlint's network-byte-order macros a little-endian arm
+        (Sun's #else is `#error`), and add the hton64() Sun forgot on integer
+        properties in output_bin.c.
+
+    mdtools/gnu/mdgen-mdlint-printf-int64.patch
+        %llx/%lld -> PRIx64/PRId64 for uint64_t in the --text/--dot writers;
+        no output change, silences five -Wformat warnings on LP64.
+
+    obp/gnu/engine-getmem-mprotect-exec.patch
+        The Forth engine's getmem() must mprotect() its arena executable: the
+        dictionary it loads is SPARC machine code entered as a function
+        pointer, and Linux (unlike Solaris) gives malloc'd memory no PROT_EXEC.
+
+    obp/gnu/makeprom-ptr-roundup.patch
+        makeprom's ROUNDUP() truncates a pointer to int on LP64; use a
+        pointer-width form at its two call sites. sys/dropins.h is untouched.
+
+    obp/gnu/engine-tools-c99-decls.patch
+        Twelve declarations GCC 14 rejects by default (implicit function,
+        implicit int, return without value) in the engine and host tools.
+        One of them, sigset via s_signal(), truncated a pointer on LP64.
+
+    obp/gnu/printf-widths.patch
+        Nine printf widths in makeprom.c/makedi.c/fsys.c that assumed ILP32;
+        all on verbose/debug paths. No output change, clean -Wformat.
+
+    obp/gnu/engine-warning-cleanups.patch
+        The engine's last warnings: `#endif SCCS` labels, (void) on
+        warn_unused_result calls, getwd -> getcwd with the bound. Zero left.
+
+    obp/sun/elf2bin-keep-section-gap.patch
+        elf2bin: keep the gap between sections whatever address the first one
+        has. Without it, Developer Studio 12.6's decomp.o was placed wrong in
+        reset.bin and the PROM printed nothing.
+
+    obp/forth/ophir-qemu-e1000.patch
+        Add a QEMU-e1000 (82540EM) as branch to Sun's Ophir (82571) FCode; the
+        82571 path is unchanged.
+
+    obp/forth/ophir-skip-eeprom-mac-sync.patch
+        Take the e1000 MAC from the chip's MAC registers (i.e. -device
+        e1000,mac=...), not from an MD node.
+
+    obp/forth/md-iodevice-reg-guard.patch
+        On QEMU's flat PCIe bus (pci@0), keep OBP's MD-iodevice->device match
+        from hanging on a reg-less child of the root nexus -- a hang that
+        happens during OBP init, before its banner.
+
+    obp/forth/ide-srst-no-bsy-check.patch
+        Let OBP's IDE probe detect a drive under QEMU, whose ATA software
+        reset finishes too fast for the BSY check (currently for cmd646).

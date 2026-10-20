@@ -1,0 +1,81 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# The tools the other gates rest on, tried on hand-made input: a gate that exits 0 with a FAIL line in its output is a FAIL (tests/lib/gate.sh,
+# tests/run-all), and the release's source bundle keeps every file of md/ however long the list (build/pack-md.sh). No build, no QEMU, a
+# few seconds. Linux and GNU tar; bash.
+#
+#   tests/full/tools/run        or  make tools-verify
+HERE=$(cd "$(dirname "$0")" && pwd)
+SRC=$(cd "$HERE/../../.." && pwd)
+T=$(mktemp -d "${TMPDIR:-/tmp}/tools-test.XXXXXX") || exit 2
+trap 'rm -rf "$T"' EXIT
+fail=0
+ok()  { echo "ok  $1"; }
+bad() { echo "FAIL $1"; fail=1; }
+# expect STATUS DESCRIPTION CMD...  (the output is kept in $T/out)
+expect() {
+    want=$1; what=$2; shift 2
+    "$@" > "$T/out" 2>&1; rc=$?
+    if [ "$rc" = "$want" ]; then ok "$what"; else bad "$what: exit $rc, wanted $want: $(cat "$T/out")"; fi
+}
+
+# --- tests/lib/gate.sh: the result line follows from the exit status AND what the gate printed
+mkgate() { printf '#!/bin/sh\n%s\n' "$2" > "$T/$1"; chmod +x "$T/$1"; }
+mkgate g-ok       "printf 'ok  a\nok  b\n'"
+mkgate g-failline "printf 'ok  a\nFAIL b\n'"
+mkgate g-onlyfail "printf 'FAIL b\n'"
+mkgate g-nothing  "echo hello"
+mkgate g-skip     "echo 'skip nothing to do'; exit 3"
+mkgate g-exit1    "printf 'ok  a\n'; exit 1"
+gate() { env NO_COLOR=1 TERM=dumb RUN_ALL= bash "$SRC/tests/lib/gate.sh" t "$T/$1"; }
+expect 0 "gate.sh: ok lines, exit 0 -> PASS"                   gate g-ok
+grep -q "PASS" "$T/out" && ok "gate.sh: the result line says PASS" || bad "gate.sh: no PASS in: $(cat "$T/out")"
+expect 1 "gate.sh: exit 0 but a FAIL line -> FAIL"            gate g-failline
+expect 1 "gate.sh: exit 0, only a FAIL line -> FAIL"          gate g-onlyfail
+expect 1 "gate.sh: exit 0 and no check at all -> FAIL"        gate g-nothing
+expect 0 "gate.sh: skip line and exit 3 -> SKIP, exit 0"      gate g-skip
+grep -q "SKIP" "$T/out" && ! grep -q "PASS" "$T/out" && ok "gate.sh: the result line says SKIP, not PASS" || bad "gate.sh: not SKIP in: $(cat "$T/out")"
+expect 1 "gate.sh: exit 1 -> FAIL"                            gate g-exit1
+gate g-failline > "$T/out" 2>&1; grep -q "FAIL" "$T/out" && grep -q "1 FAIL line" "$T/out" && ok "gate.sh: says why" || bad "gate.sh: no reason in: $(cat "$T/out")"
+
+# --- tests/run-all, on a copy of itself in a tree whose Makefile has one gate ("smoke" = make test)
+mkdir -p "$T/ra/tests"; cp "$SRC/tests/run-all" "$T/ra/tests/run-all"
+runall() {   # runall LINE...: the gate prints each LINE
+    { echo test:; for l in "$@"; do printf '\t@echo "%s"\n' "$l"; done; } > "$T/ra/Makefile"
+    python3 "$T/ra/tests/run-all" --only smoke --color never --tail 3 --verbose
+}
+expect 0 "run-all: ok lines, exit 0 -> PASS"                  runall "ok  a" "ok  b"
+expect 1 "run-all: exit 0 but a FAIL line -> FAIL"            runall "ok  a" "FAIL b"
+expect 1 "run-all: exit 0 and no check at all -> FAIL"        runall "hello"
+
+# --- build/pack-md.sh: every tracked file of md/ arrives, also when the list is longer than one xargs run
+R=$T/repo; mkdir -p "$R/md" "$T/stage"
+( cd "$R" && git init -q . && git config user.email t@t && git config user.name t
+  i=0; while [ $i -lt 3000 ]; do : > "md/a-file-with-a-rather-long-name-to-make-the-list-long-$i.pdesc"; i=$((i+1)); done
+  git add md && git commit -qm t )
+n=$( cd "$R" && git ls-files -z md | xargs -0 echo | wc -l )
+[ "$n" -gt 1 ] && ok "pack-md: the list ($(cd "$R" && git ls-files md | wc -l) files) does not fit one xargs run ($n runs): the case means something" \
+               || bad "pack-md: the list fits one xargs run: make it longer"
+expect 0 "pack-md.sh runs" bash "$SRC/build/pack-md.sh" "$R" "$T/stage"
+want=$(cd "$R" && git ls-files md | wc -l); got=$(cd "$T/stage" && find md -type f | wc -l)
+[ "$want" = "$got" ] && ok "pack-md: all $want files arrived" || bad "pack-md: $got of $want files arrived"
+
+# --- forth_bootstrap/fbwork.sh: a relative FB_WORK becomes an absolute path (the scripts change directory)
+mkdir "$T/fbcwd"
+got=$( cd "$T/fbcwd" && FB_WORK=rel-fb sh -c ". '$SRC/forth_bootstrap/fbwork.sh'; echo \$W" 2>&1 )
+[ "$got" = "$T/fbcwd/rel-fb" ] && ok "fbwork: a relative FB_WORK is made absolute" || bad "fbwork: FB_WORK=rel-fb gave '$got'"
+
+# --- scripts/check-headers.sh: every makefile and Containerfile at any depth, not only the top-level Makefile
+# (the script works in the repository it sits in: a copy of it goes into the hand-made one)
+H=$T/hdr; mkdir -p "$H/sub/deeper" "$H/scripts" && cp "$SRC/scripts/check-headers.sh" "$H/scripts/" && ( cd "$H" && git init -q . && git config user.email t@t && git config user.name t
+    printf 'all:\n' > Makefile; printf 'all:\n' > sub/Makefile; printf 'FROM scratch\n' > Containerfile
+    printf 'FROM scratch\n' > sub/deeper/Containerfile; printf 'x = 1\n' > sub/deeper/x.mk; git add -A )
+( cd "$H" && bash scripts/check-headers.sh ) > "$T/out" 2>&1; rc=$?
+n=$(grep -c '^no licence header' "$T/out")
+[ "$rc" = 1 ] && [ "$n" = 5 ] && ok "check-headers: 5 files without a header found (nested Makefile, Containerfile, *.mk)" || bad "check-headers: exit $rc, $n of 5 reported: $(cat "$T/out")"
+( cd "$H" && bash scripts/check-headers.sh --fix ) > /dev/null 2>&1
+expect 0 "check-headers: --fix gives all of them the header" bash -c "cd '$H' && bash scripts/check-headers.sh"
+
+if [ "$fail" = 0 ]; then echo "tools tests: all passed"; exit 0; fi
+echo "tools tests: FAILED"; exit 1

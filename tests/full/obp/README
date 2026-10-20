@@ -1,0 +1,79 @@
+tests/full/obp -- the OBP (openboot.bin) equivalence gate
+=========================================================
+
+Proves the GNU/Linux build of openboot.bin (build/obp/gnu/) is equivalent to
+Sun's own Solaris/Sun-Studio build from the same source. The full claim,
+method and evidence are in TESTS; this file is only the map of what runs
+where.
+
+    make obp-verify            the internal gate (below), also `make obp-test`,
+                               same thing
+    make obp-test-external TARBALL=<tarball>
+                               the external checks (below)
+
+Layout
+------
+    run           runs every internal/*.sh in order, stops at the first
+                  failure; shares one pci build across the ones that need it
+                  (lib/build-pci.sh)
+    internal/     one script per check, no tarball needed -- everything they
+                  read is already in this repository (src/obp,
+                  PRISTINE-MANIFEST, expected/*.sha256)
+    external/     needs OpenSPARCT2_Arch.1.2.tar.bz2 (OPENSPARC_T2=<path>, or
+                  pass the path directly). Confirms the internal checks'
+                  assumptions against Sun's actual release archive, and is
+                  how expected/*.sha256 get regenerated after a src/obp
+                  change. Not run by `run` or `make obp-verify`.
+    lib/          shared code: dic-diff.py and records.py (the OBMD/dic
+                  comparison logic every test above builds on), dict-dump.sh,
+                  compare-reference.sh, decomp-ab/ (Appendix A tools),
+                  build-pci.sh (the shared-build helper). The decomp-ab tools
+                  are those of Appendix A of TESTS: they compare, byte for
+                  byte, a build by the GNU path with one by Sun's own
+                  toolchain; they take their directories as arguments. The
+                  Sun-built capture they were run against is not in this
+                  repository; the gate does not use it (its pinned hashes are
+                  in expected/sun-records.sha256).
+    expected/     committed hashes an internal test checks against --
+                  sun-records.sha256, dict-dump.sha256. Never edit by hand;
+                  external/sun-records-regenerate.sh writes both.
+                  dic-user-area.<name>.txt are not hashes: the user-area cells
+                  that differ from Sun's host dictionary and that no
+                  correction (entry delta, length shift) explains (dic-host;
+                  dic-diff.py OURS SUNS --write-user-pin FILE writes one, to
+                  be reviewed before it is committed).
+    TESTS         the full narrative: the claim, every test's method and
+                  measured result, the differences that remain and why each
+                  is not a defect, the whole build-layer inventory.
+
+Build-time tools live under build/obp/gnu/tools/ instead (forth32.sh,
+forth64.sh, makedi.sh, makeprom.sh, bootstrap-dics.sh, decomp-size.sh) --
+obp-gnu.mk depends on them to produce openboot.bin itself, not just to test
+it, so they stay next to the build they serve.
+
+Internal tests, in the order `run` uses
+----------------------------------------
+    src-intact       PRISTINE-MANIFEST vs the working tree (whole repo, not
+                     just OBP)
+    dic-kernels      the bootstrapped kernel dictionaries vs src/obp
+    dic-fixpoint     a second bootstrap generation from our own root
+                     reproduces itself
+    dic-host         the host dictionaries vs src/obp, reconciled for the
+                     known differences (dic-diff.py); the user-area cells that
+                     no correction explains are pinned (expected/dic-user-area.*)
+    sun-records      pristine builds vs Sun's own shipped images
+    patch-locality   patched vs pristine: only the patched dropins differ
+    dict-content     the product's dictionary word list (regression check)
+
+External tests
+--------------
+    src-pristine              PRISTINE-MANIFEST vs the tarball itself, not
+                              just the working tree
+    sun-records-regenerate    rewrites expected/*.sha256 from the tarball
+                              and a fresh build; review the diff before
+                              committing
+
+Every script takes QEMU_SPARC32 and QEMU_SPARC64 (a qemu-sparc32plus and a
+qemu-sparc64 linux-user binary) from the environment; `make` sets both from
+config.mk. Running a script directly needs them set by hand -- see
+REQUIREMENTS.LINUX.

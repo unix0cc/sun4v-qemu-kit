@@ -1,0 +1,234 @@
+build_matrix -- how the firmware is built, and what was tested with which tools
+==============================================================================
+
+Contents
+    1. Initial build path
+    2. OS / environments tested
+    3. gnu path in containers
+    4. gnu path, gcc 13 to 16 and binutils
+    5. sun path, Studio versions
+    6. offsets.h from DWARF
+    7. The OBP root dictionary rebuilt by the chain
+    8. Guests booted by hand
+
+
+1. Initial build path
+---------------------
+The project was first built on these. Everything tested is in section 2.
+
+The GNU path (TOOLCHAIN=gnu, default):
+    host      Ubuntu 24.04 x64
+    compiler  gcc 13, binutils 2.42: sparc64-linux-gnu gcc, as, ld, objcopy;
+              host gcc for mdgen, mdlint, didepend
+    OBP       Sun's Forth engine (C, from the Sun/Oracle source) built for SPARC
+              Linux;
+              runs under qemu-sparc64 / qemu-sparc32plus and metacompiles the
+              final OpenBoot image
+    needs     REQUIREMENTS.LINUX
+
+The SPARC/Solaris path (TOOLCHAIN=sun):
+    host      Solaris 10 1/13 sparc64
+    compiler  Sun Studio 11 cc, /usr/ccs/bin/as, patch 118683-15, Sun's
+              unmodified Makefile.master chain
+    OBP       Sun's own chain
+    needs     REQUIREMENTS.SOLARIS
+
+
+2. OS / environments tested
+---------------------------
+
+TOOLCHAIN=gnu:
+
+    Environment                            Type       Note
+    -------------------------------------  ---------  -------------
+    Ubuntu 24.04, gcc 13 (initial)         OS         see section 4
+    Ubuntu 24.04, gcc 14, 15, 16 (source)  OS         see section 4
+    Ubuntu 24.04, gcc 13                   container  see section 3
+    Debian 13, gcc 14                      container  see section 3
+    Ubuntu 26.04, gcc 15                   container  see section 3
+
+Passed: `make test-all`, `make login-verify` (needs a guest disk).
+
+TOOLCHAIN=sun (each compiler is a separate install in /opt, see also section
+5):
+
+  Studio                        cc
+  ----------------------------  ------------------------------------------------
+  Sun Studio 11 (initial)       Sun C 5.8 2005/10/13
+  Sun Studio 12.0               Sun C 5.9 SunOS_sparc Patch 124867-01 2007/07/12
+  Sun Studio 12.1               Sun C 5.10 SunOS_sparc 2009/06/03
+  Oracle Solaris Studio 12.2    Sun C 5.11 SunOS_sparc 2010/08/13
+  Oracle Solaris Studio 12.3    Sun C 5.12 SunOS_sparc 2011/11/16
+  Oracle Solaris Studio 12.4    Sun C 5.13 SunOS_sparc 2014/10/20
+  Oracle Developer Studio 12.5  Studio 12.5 Sun C 5.14 SunOS_sparc 2016/05/31
+  Oracle Developer Studio 12.6  Studio 12.6 Sun C 5.15 SunOS_sparc 2017/05/30
+
+Built on Solaris, which runs as a QEMU guest and cannot host QEMU itself.
+Passed: `gmake sun-verify`, `make sun-login-verify` (on the Linux host).
+`test-all` and `release-check` are not run on Solaris.
+
+
+3. gnu path in containers
+-------------------------
+Rootless podman, one container/Containerfile for all of them (container/README),
+a fresh clone per run (container/clean-room.sh), builds run by hand in the
+container's shell.
+
+    image         gcc   linux-user emulator                   language flags
+    ------------  ----  -----------------------------------   --------------
+    Ubuntu 24.04  13    qemu-user-static                      default
+    Debian 13     14.x  qemu-user-static (-static binaries)   default
+    Ubuntu 26.04  15.x  qemu-user (no -static package)        -std=gnu17
+
+(gcc: the cross gcc and the host gcc, of the same version.)
+
+What the images needed (each is in the repository):
+- Debian's cross gcc is --enable-default-pie: the PIC thunk in decomp.o breaks
+  reset.bin's size accounting ("3796 bytes but header declares only 3764").
+  decomp.o is built with -fno-pic -fno-pie.
+- GCC 15 defaults to C23: the OBP engine and the host tools (mdgen's `false` as
+  an enumeration constant, didepend.c) are built with -std=gnu17.
+- Ubuntu 26.04 has no qemu-user-static package: qemu-user provides qemu-sparc64
+  and qemu-sparc32plus. configure and release.sh look for NAME-static first,
+  then NAME.
+- `make all` begins with `clean`; the toolchain record of
+  build/toolchain-check.sh is written again after it.
+- Cloning a detached HEAD made Debian's git print its "initial branch" hint;
+  release.sh and clean-room.sh clone with -c init.defaultBranch=main.
+- `dwarf2genassym: Can't find snet_info` in the log of make all is expected
+  (build/hv_reset/README.dwarf).
+
+Not covered: make bootstrap-check (needs the host's binfmt_misc handlers),
+Debian forky, docker, the sun path.
+
+
+4. gnu path, gcc 13 to 16 and binutils
+---------------------------------------
+Cross gcc (hypervisor, PROM): 13, 14, 15, 16. Host gcc (mdgen, mdlint; make md):
+13.3, 14.4, 15.3, 16.2. GCC 15 and later need -std=gnu17
+(build/hv_reset/gnu/README); without it mdgen stops on mdgen/basics.h:67,
+`false` as an enumeration constant.
+
+Full builds from scratch, cross gcc and host gcc of the same version
+(./configure --with-gcc-cross --with-gcc, make all, make test; 13 is the
+distribution's, with no options):
+
+    gcc    binutils (as, ld)   language    make all
+    ----   -----------------   ----------  --------
+    13.3   2.42 Ubuntu, 2.47   default     22 s
+    14.4   2.42 Ubuntu, 2.47   default     21 s
+    15.3   2.42 Ubuntu, 2.47   -std=gnu17  21 s
+    16.2   2.42 Ubuntu, 2.47   -std=gnu17  22 s
+With each pair, `make all` passes and `make test` reaches the ok prompt. The
+time is for 2.42. 2.47 is binutils 2.47.20260726 built from
+ftp.gnu.org/gnu/binutils and used with `./configure --with-binutils-cross=DIR`
+(`legion`); configure checks that the gcc runs the as and ld the build calls.
+
+`make test-all` passes with each of them (smoke, md, boot, hv, workdir,
+guards, obp); with a guest disk the `login` gate too: every gnu set (gcc
+13.3, 14.4, 15.3 and 16.2 built from the distribution and from source, and
+the containers' 14.2 and 15.2) reaches the login prompt in about 34 s.
+
+
+5. sun path, Studio versions
+----------------------------
+Every Studio was built and booted to the OpenBoot ok prompt (`make test`).
+Each is a full install in its own /opt directory, passed with
+`--with-sun-studio=DIR`, and nothing else needs to change. They differ in:
+- 12.2 and later need cc -xbuiltin=%none (build/cc-nobuiltin.sh); 12.2 needs
+  -xdepend=no as well (build/cc-nobuiltin-nodepend.sh).
+- 12.5 and 12.6 cannot start on an emulated T1 guest that does not declare
+  VIS (their cc uses it; ld.so.1 refuses it): `isainfo -v` must list vis.
+  ./configure checks that cc compiles and says so if not; the real T1 has no
+  VIS, so on emulated hardware the declaration has to be added:
+  https://unix0.cc/2026/10/05/sparc-vis-capability-mask/ (set on the guest for
+  all the runs here).
+- 12.6 writes no stabs (offsets.h from DWARF).
+All are probed and handled; what ./configure checks: README.configure.
+
+What ./configure measured for each (the count is of lines, so only zero or not
+zero matters):
+
+    Studio  cc    .stabs lines  _memcpy/_memset calls  then
+    ------  ----  ------------  ---------------------  --------------------
+    11      5.8   215           0
+    12.0    5.9   218           0
+    12.1    5.10  206           0
+    12.2    5.11  206           2 (decomp.c)           -xbuiltin=%none
+                                                       -xdepend=no
+    12.3    5.12  206           2 (decomp.c)           -xbuiltin=%none
+    12.4    5.13  206           2 (decomp.c)           -xbuiltin=%none
+    12.5    5.14  206           2 (decomp.c)           -xbuiltin=%none
+    12.6    5.15  0             4 (decomp.c, hv)       -xbuiltin=%none,
+                                                       offsets.h from DWARF
+The builds of one commit give a different q.bin and a different openboot.bin
+for each Studio (the compiler differs); reset.bin and the MD blobs are the
+same in all of them.
+
+gmake all on the guest (Solaris under emulated QEMU), seconds, one run each,
+nothing else running:
+
+    Studio  11   12.0  12.1  12.2  12.3  12.4  12.5  12.6
+    ------  ---  ----  ----  ----  ----  ----  ----  ----
+    time    322  338   448   401   883   456   820   1305
+Another run on the same machine can differ by a third. All give the same
+1up-md.bin and 1up-hv.bin (the pins of blobs.sha256, the same as the gnu
+path), and each set reaches the login prompt in about 34 s.
+
+Each Studio's own assembler, bin/fbe, is not used by the build. Measured with
+`fbe -xarch=v9d` on one rdhpr instruction: Studio 11 to 12.3 reject it cleanly
+("invalid register"); 12.4, 12.5 and 12.6 accept it. The sun path uses the
+system's /usr/ccs/bin/as (Studio 12.5, patch 118683-15) for every Studio.
+
+
+6. offsets.h from DWARF
+-----------------------
+The hypervisor's assembler sources need the byte offsets of C struct members;
+offsets.h holds them. Sun's makefiles make it with Sun's `stabs` tool, which
+reads stabs debug info. gcc and Studio 12.6 cannot write stabs, so there
+offsets.h is made from DWARF by dwarf2genassym.pl (build/hv_reset/gnu/README,
+build/hv_reset/README.dwarf). The result is compared with the file Sun made
+for ontario/legion:
+
+    gnu  gcc 13.3, 14.4, 15.3, 16.2   each byte-identical to Sun's
+                                      (gnu/reference/offsets.ontario-legion.h)
+    sun  Developer Studio 12.6        byte-identical to Sun's
+                                      (build/hv_reset/README.dwarf)
+Sun Studio 11 to 12.5 write stabs, so `stabs` makes offsets.h there.
+
+
+7. The OBP root dictionary rebuilt by the chain
+------------------------------------------------
+The OBP root, os/sun/sparc/forth.dic (the one shipped binary), replaced by a
+dictionary the chain built itself (gnu path, legion, same OUTDIR,
+SOURCE_DATE_EPOCH fixed):
+
+    root                                   openboot.bin
+    ------------------------------------   ---------------
+    shipped forth.dic                      reference
+    forth32-xref.dic, built by the chain   identical to it
+    f32t32.dic, built by the chain         identical to it
+Both were themselves made by the chain from the shipped root, so one
+generation from the seed is still needed. The build runs in a scratch directory
+of fixed path length (build/obp/gnu/build-obp.sh), because the OBP engines take
+addresses from the length of their paths: with OUTDIR names of different
+length openboot.bin comes out the same.
+
+
+8. Guests booted by hand (not part of test-all)
+-----------------------------------------------
+Firmware 848c07f (legion) and 8d9e574 (pci); QEMU with the vpci stack, which
+starts with the TTE page-size patch (256M pages; md/legion/README, "The
+guest"). Stock QEMU 8.2.2 runs legion on S10 but stalls loading the b134 kernel
+(the known 256M page-size bug); pci needs the patched QEMU anyway (vpci,
+cmd646, mptsas).
+
+    config  guest                       boot device    result
+    ------  --------------------------  -------------  ------------------
+    legion  OpenSolaris b134 (AI ISO)   cdrom          maintenance prompt
+    pci     OpenSolaris b134 (AI ISO)   cdrom, cmd646  maintenance prompt
+    pci     Solaris 10 u11 (installed)  disk, cmd646   console login:
+The maintenance prompt is "Enter user name for system maintenance": the live
+image's behaviour when its login service does not start; both configurations
+stop in the same place. Not tried: Solaris 11 (S11.1 on pci stops after `e1000g0
+link up`).

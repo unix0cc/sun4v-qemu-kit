@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# config.auto.mk -- written by ./configure @configure_input@
+# config.mk includes this first, so what is set here wins over its defaults;
+# `make VAR=...` on the command line wins over both. Delete the file to go back to
+# config.mk alone: the build works without configure.
+#
+# where ./configure ran (config.mk compares): the sources, and the directory this file is in
+CONFIGURED_SRC = @nfw_top@
+CONFIGURED_BUILD = @nfw_builddir@
+TOOLCHAIN = @TOOLCHAIN@
+@OUTDIR_ON@OUTDIR = @OUTDIR@
+@WORKDIR_ON@WORKDIR = @WORKDIR@
+@HVUART_ON@HV_UART = @HV_UART@
+@MDCFG_ON@TARGET = @TARGET@
+@MDMEM_ON@MD_MEM = @MD_MEM@
+# where make install puts things (configure --prefix, --datadir, --docdir)
+prefix = @prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+# configure's docdir is ${datarootdir}/doc/${PACKAGE_TARNAME}: make needs the second name too, or docdir ends in doc/ itself
+# and `make uninstall` removes README files of other packages from the shared directory
+PACKAGE_TARNAME = @PACKAGE_TARNAME@
+docdir = @docdir@
+
+# --- gnu: @nfw_cross_version@
+@GNU_ON@GNU_CROSS_BIN = @GNU_CROSS_BIN@
+@GNU_ON@export PATH := $(GNU_CROSS_BIN):$(PATH)
+@GNU_ON@QEMU_SPARC64 = @QEMU_SPARC64@
+@GNU_ON@QEMU_SPARC32 = @QEMU_SPARC32@
+# a compiler whose default language level rejects the hypervisor's sources (GCC 15 and later: C23)
+@GNU_ON@@CSTD_ON@export GNU_CSTD = @GNU_CSTD@
+# the host's own gcc, which builds mdgen and mdlint (@nfw_host_version@)
+@GNU_ON@HOST_GCC = @HOST_GCC@
+@GNU_ON@@HCSTD_ON@HOST_CSTD = @HOST_CSTD@
+
+# --- sun: @SUN_CC_VERSION@
+@SUN_ON@SUN_STUDIO = @SUN_STUDIO@
+@SUN_ON@PATCH = @SUN_PATCH@
+@SUN_ON@OBJCOPY_SUN = @SUN_OBJCOPY@
+# probe results, so that make does not probe again: the stabs type lines the cc writes
+# (0: offsets.h from DWARF), and the _memcpy/_memset calls it makes from loops (not 0: cc -xbuiltin=%none)
+@SUN_ON@HV_STABS_PROBE = @HV_STABS_PROBE@
+@SUN_ON@SUN_CC_LIBCALLS = @SUN_CC_LIBCALLS@
+@SUN_ON@SUN_CC_NODEPEND = @SUN_CC_NODEPEND@

@@ -1,0 +1,20 @@
+sys/stack.h -- SPARC V9 stack frame constants, from the platform ABI
+====================================================================
+
+The OpenSPARC hypervisor source includes <sys/stack.h> in 13 files but does
+not ship it: it belongs to the Solaris kernel build environment. The gnu path
+needs it (the sun path takes it from SUNWhea) and it is the only external
+header that path reaches. 5 of the 13 files are compiled for ontario/legion;
+between them they use four symbols: V9BIAS64, STACK_BIAS, MINFRAME, SA().
+
+These are the 64-bit SPARC V9 stack-frame layout defined by the platform ABI,
+which every SPARC V9 System V implementation must use identically. The file is
+written from the specification, SPARC Compliance Definition 2.4.1 (SPARC
+International, 1999), section 3P-8, Figures 3-16 and 3-17; the header cites
+each constant. It replaces a copy of illumos-gate's stack.h (CDDL), so q.bin
+has no CDDL component. Checked: q.bin and reset.bin built with either file
+are byte-identical.
+
+There is no Linux package to take it from: neither linux-libc-dev nor
+libc6-dev for sparc64 defines these constants in a header, and the kernel
+hardcodes them in arch/sparc/kernel/*.S, under GPL-2.

@@ -1,0 +1,110 @@
+hv_reset: hypervisor (q.bin) and CPU reset vector (reset.bin)
+=============================================================
+
+Build
+-----
+    make hv_reset                  toolchain is picked from `uname -s`
+    make hv_reset TOOLCHAIN=sun    Solaris + Sun Studio, Sun's own makefiles
+    make hv_reset TOOLCHAIN=gnu    sparc64-linux-gnu cross tools, no Sun code
+
+Output: $OUTDIR/q.bin and $OUTDIR/reset.bin.
+
+Both paths start the same way: copy src/hypervisor to a work directory,
+apply patches/hv to the copy, build in the copy. src/hypervisor is never
+modified.
+
+Compile options (-D/-U) are listed in options.mk; the reasons are in
+README.options.
+
+
+Sun toolchain (TOOLCHAIN=sun)
+-----------------------------
+This is Sun's own build: Makefile.master, Makefile.platform, SysV make and
+Sun Studio cc, used as they are. Three tool macros are overridden on the make
+command line -- AS, LD and OBJCOPY -- and all three point at system tools.
+No prebuilt tool from the OpenSPARC release is used.
+
+The assembler. The hypervisor runs in hyperprivileged mode and uses
+registers normal code never sees: %hpstate, %htstate, %htba, %hver, %hintp,
+%hstick_cmpr, read and written with rdhpr/wrhpr. Sun's assembler enables
+their names with one option:
+
+    -xarch=v9d          (greatlakes/Makefile.family:62, ASFLAGS)
+
+v9d is not a public arch level; the assembler's usage text lists only
+v7 ... v9b. Which assemblers accept it:
+
+  - /usr/ccs/bin/as from the s10u11 install media (118683-07): rejects it.
+    Every %h* register is an "invalid register".
+  - Sun Studio 11 fbe: rejects it.
+  - /usr/ccs/bin/as with patch 118683-15 (Studio 12.5 Compiler Common):
+    accepts it. This is what the sun path uses; AS_SUN in config.mk.
+    check-sun-toolchain tries a real rdhpr before the build starts.
+    REQUIREMENTS.SOLARIS says where the patch comes from.
+
+The linker. The patched assembler adds a .SUNW_cap section (hardware
+capabilities, a side effect of -xarch=v9d) to every object. ld puts that
+section in its own PT_LOAD after .bss and moves _etext there, 12 MB past the
+image. start_master uses _etext as the end of the ROM-to-RAM copy, so the
+copy would be 12 MB instead of 250 KB. sun/nocap.mapfile zeroes the
+capability mask and ld then emits no such section; hv_reset.mk passes it as
+a second -M on every link.
+
+Two more tools are needed. Both are built from src/hypervisor/src/support:
+
+  stabs   Generates offsets.h. The assembler code reads C struct fields by
+          constant offsets (STRAND_*, CPU_*, ...), which Sun computes at
+          build time: a stub file is compiled with -xdebugformat=stabs -g -S,
+          and stabs reads offset, size and stride from the debug records.
+
+              cc -xdebugformat=stabs -g -S -o offsets-n1.s offsets-n1.c
+              stabs -t genassym -m lp64 offsets.tmp < offsets-n1.s > offsets.h
+
+          It is used as a struct-layout tool, not for debugging.
+
+  aschk   Checks assembler source. Makefile.platform has
+          `q: chkasm $(OBJS)`, so aschk runs before q.bin is linked. It
+          cannot be skipped.
+
+Nothing prebuilt is needed, and replacing it changes nothing. Checked by
+building the unmodified hypervisor from the OpenSPARC T2 source release
+both ways:
+  - source-built stabs/aschk against Sun's prebuilt ones: offsets.h and
+    reset.bin byte-identical; q.bin differs only in the build timestamp and
+    directory path;
+  - system as + nocap.mapfile against Sun's prebuilt assembler: reset.bin
+    identical; q.bin differs only in the timestamp.
+No difference in code or data either time. (Those comparisons predate the
+build stamp: the timestamp is now the commit's, so two builds of one commit
+give an identical q.bin. The build directory, which Sun cc records in a debug
+stub of each C object, no longer lands in q.bin: mcs removes the stubs before
+the link, patches/hv/hv-sun-strip-debug.patch -- see the comment in
+build/hv_reset.mk.)
+
+
+GNU toolchain (TOOLCHAIN=gnu)
+-----------------------------
+A port, not a rebuild. gnu/build.sh replaces Sun's makefiles and toolchain.
+It does four things:
+
+  - Rewrites syntax that Sun's as accepts and GNU as rejects: gnu/fixup.sed
+    and the fix() calls in build.sh, each with a comment.
+  - Reimplements `.pushlocals` / `.poplocals` (gnu/pushlocals.py).
+  - Links with its own linker script, q.ld, instead of Sun's mapfile.
+  - Adds a memcpy shim. gcc emits memcpy calls for struct copies, Sun's cc
+    did not, and the hypervisor has no memcpy of its own.
+
+offsets.h cannot be made the Sun way (gcc removed -gstabs in GCC 12, and Sun's
+stabs reads only Sun's dialect anyway), but it can be made with Sun's
+semantics: dwarf2genassym.pl compiles a stub that refers to every type
+offsets.in names with -gdwarf-4, reads the layout from
+`readelf --debug-dump=info`, and prints what `stabs -t genassym` prints. The
+result is byte-identical to the offsets.h Sun's stabs makes for this target,
+gnu/reference/offsets.ontario-legion.h. The same script reads Developer Studio
+12.6's DWARF (dwarfdump) on the Sun path.
+
+The output is not byte-identical to the sun build and is not meant to be:
+the assemblers encode the same constants differently (alignment padding, how
+synthetic instructions such as setx are expanded), the linker scripts differ,
+and the C code comes from another compiler. Both boot to the same OBP banner.
+Details: gnu/README.

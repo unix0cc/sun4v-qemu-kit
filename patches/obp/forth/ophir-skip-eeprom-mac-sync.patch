@@ -1,0 +1,55 @@
+MAC for QEMU's e1000: read it from the chip in open(), not the EEPROM or the MD.
+
+On a real 82571, pkg.fth's update-mac-address reads a MAC from the MD and
+bit-bangs the card EEPROM to keep it in step against a chip reset.
+
+QEMU's 82540EM has no such story: the EEPROM is synthesised from
+-device e1000,mac= and never reloaded, and the EEC bit-bang never signals
+ready -- that path hangs OBP. Under qemu-e1000? update-mac-address does
+nothing, and open() instead reads RAL0/RAH0 (0x5400/0x5404) -- which
+e1000_reset already loaded from the synthesised EEPROM, and which are read
+before bringup-link's net-on resets the chip -- and publishes them as
+local-mac-address. The command-line mac= is then the single source of truth:
+no EEPROM access, no pci-network MD node.
+
+The 82571 EEPROM path is unchanged. Needs the qemu-e1000? predicate from
+ophir-qemu-e1000.patch (apply order).
+
+--- a/obp/dev/network/ophir/pkg.fth	2026-09-08 23:53:52.393178689 +0200
++++ b/obp/dev/network/ophir/pkg.fth	2026-09-08 23:53:52.405178790 +0200
+@@ -98,8 +98,27 @@
+    reg-base  if  net-off unmap-resources  then
+ ;
+ 
++6 buffer: qe-mac-buf
++
+ : open  ( -- flag )
+    map-resources
++   qemu-e1000? if
++      \ QEMU 82540EM: RAL0/RAH0 still hold the address e1000_reset loaded from
++      \ the EEPROM QEMU synthesises from -device e1000,mac=. Read it here,
++      \ before bringup-link's net-on resets the chip, and publish it as
++      \ local-mac-address -- the command-line mac= is then the only source,
++      \ with no EEPROM bit-bang and no MD network-vpd node. Shift counts are
++      \ d# -- this file runs with a hex tokenizer base.
++      h# 5400 reg@                                ( ral: mac[0..3] LE )
++      dup               h# ff and  qe-mac-buf    c!
++      dup  d#  8 rshift h# ff and  qe-mac-buf 1+ c!
++      dup  d# 16 rshift h# ff and  qe-mac-buf 2+ c!
++           d# 24 rshift h# ff and  qe-mac-buf 3 + c!
++      h# 5404 reg@                                ( rah: mac[4..5] + AV )
++      dup               h# ff and  qe-mac-buf 4 + c!
++           d#  8 rshift h# ff and  qe-mac-buf 5 + c!
++      qe-mac-buf 6 encode-bytes  " local-mac-address" property
++   then
+    my-args parse-devargs
+    init-obp-tftp 0= if  close false exit  then
+    bringup-link ?dup 0=  if  close false exit  then
+@@ -273,6 +292,7 @@
+ \ for example) so we have to make sure the EEPROM matches what we 
+ \ assign the device
+ : update-mac-address ( -- )
++   qemu-e1000? if  exit  then   \ QEMU: MAC handled in open, from the chip
+    find-my-mac-addr ?dup if
+       map-resources			( mac-adr-ptr )
+       dup w@ wbflip >r			( mac-adr-ptr )( R: mac0 )

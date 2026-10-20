@@ -1,0 +1,35 @@
+License map for this repository
+=================================
+
+This repository is not one license. It's an aggregate: this project's own
+build tooling and patches, wrapped around vendored OpenSPARC T2 hypervisor
+and OpenBoot PROM source (BSD+), plus machine descriptions derived from
+Sun's OpenSPARC T1 configurations (GPL-2).
+Read the file for the path you care about -- do not assume one license
+covers everything here. The terms, and why, are in LICENSE_CODE.
+
+    Path                                   Terms            Details
+    --------------------------------------------------------------------
+    src/hypervisor, src/obp                BSD+ (Sun)       LICENSE_CODE
+        1389 of 1416 files have Sun's header; the other 27 do not
+        (11 copyright line only, 9 nothing, 7 binary: LICENSE_SRC.MAP)
+    ... of which support/stabs/ (7 files)  BSD+ and CDDL    LICENSE_CODE,
+                                           headers          LICENSE_SRC.MAP
+    ... of which the Forth dictionaries,   BSD+ (our         LICENSE_CODE
+        src/obp (7 files)                  reading)
+    md/common.hdesc, md/common.pdesc,      GPL-2 (Sun, T1)  LICENSE_CODE,
+        md/*/1up.pdesc                                      md/GPLv2_License_
+                                                            OpenSPARCT1.txt
+    md/*/1up.hdesc                         GPL-2.0-only     LICENSE_CODE
+        (built together with               (ours)
+        md/common.hdesc into 1up-hv.bin)
+    everything else (build/, patches/,
+        scripts/, container/, tests/,      BSD-2-Clause     LICENSE_CODE,
+        forth_bootstrap/, md/README,                        LICENSE.BSD-2-
+        this file and the other prose                       Clause
+        docs), except as listed in
+        LICENSE_CODE
+
+PRISTINE-MANIFEST records exactly what was vendored from where, with
+checksums; treat it as the source of truth for provenance, this file only
+for terms.

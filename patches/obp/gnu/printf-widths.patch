@@ -1,0 +1,116 @@
+Source patch for the GNU build layer only -- tools/makeprom.c, tools/makedi.c,
+os/unix/fsys.c, os/unix/wrapper.c.
+
+Nine printf conversions whose width matched the ILP32 ABI this code was
+written for and not LP64. In the tools: %lx for the `int size` OBMD/dropin
+header fields (four sites), %x for a pointer difference (two: `here-start`,
+`insert_ptr-prom`, now cast to long and printed %lx) and %x for
+`size-OBMD_HDR`, which is size_t once OBMD_HDR = sizeof(obmd_t) promotes it
+(now %zx). In the engine: %d for an off_t (cast to long, %ld) and %x for a
+Forth cell, which is a long on the 64-bit engine (%lx). All nine are under
+`verbose`/debug paths this build never takes; the point is a clean -Wformat
+so a real one is not lost among them. No change to any file written.
+
+Plus one -Wformat-security site, wrapper.c's usage(): printf(help_msg) with
+a non-literal format becomes fputs(). Ubuntu's GCC turns -Wformat-security
+on by default, so -Werror=format would otherwise stop there.
+
+Applied after engine-tools-c99-decls.patch by build/obp/gnu/engine/Makefile to
+a staged copy; src/obp is never touched.
+
+diff -ru a/tools/makedi.c b/tools/makedi.c
+--- a/tools/makedi.c	2026-09-22 12:22:28.647142116 +0200
++++ b/tools/makedi.c	2026-09-22 12:22:28.728142443 +0200
+@@ -151,7 +151,7 @@
+ 	di->chksum = crc;
+ 
+ 	if (verbose) {
+-		printf(" Name: %s size = %lx", di->name, di->size);
++		printf(" Name: %s size = %x", di->name, di->size);
+ 		if (compressed)
+ 			printf(" (-%d%%)", ((size-clen)*100)/size);
+ 		printf(" checksum = %x ", di->chksum);
+@@ -409,7 +409,7 @@
+ 				 */
+ 				dlen = len;
+ 				if (verbose) {
+-					printf(" Name: %s size = %lx (COMP)",
++					printf(" Name: %s size = %x (COMP)",
+ 					    di->name, di->size);
+ 					printf(" checksum = %x\n", di->chksum);
+ 				}
+diff -ru a/tools/makeprom.c b/tools/makeprom.c
+--- a/tools/makeprom.c	2026-09-22 12:22:28.653142140 +0200
++++ b/tools/makeprom.c	2026-09-22 12:22:28.728142443 +0200
+@@ -102,7 +102,7 @@
+ 
+ 	level = (level+1) * 2;
+ 	while (level--) putchar(' ');
+-	printf("Name: %s size = %lx", obmdp->name, obmdp->size);
++	printf("Name: %s size = %x", obmdp->name, obmdp->size);
+ 
+ 	if ((dptr[0] == COMP_MAGIC) && (obmdp->size == dptr[1]))
+ 		ctype = dptr[2];
+@@ -250,14 +250,14 @@
+ 
+ 	    obmdp = (obmd_t *)here;
+ 	    if ((here-start) < size) {
+-		if (verbose) printf("Skipping to: %x\n", here-start);
++		if (verbose) printf("Skipping to: %lx\n", (long)(here-start));
+ 		    goto retry;
+ 	    }
+ 	}
+ 
+ 	if ((force) && (ndropins == 1) && ((size-OBMD_HDR) != prev->size)) {
+ 		if (verbose)
+-			printf("Fixing %s size (actual %lx, should be %x)\n",
++			printf("Fixing %s size (actual %x, should be %zx)\n",
+ 			    prev->name, prev->size, (size-OBMD_HDR));
+ 		rewrite++;
+ 		prev->size = size-OBMD_HDR;
+@@ -369,8 +369,8 @@
+ 		int rlen;
+ 
+ 		if (verbose)
+-			printf("Scanning: %s @ %x\n", argv[i],
+-			    (insert_ptr-prom));
++			printf("Scanning: %s @ %lx\n", argv[i],
++			    (long)(insert_ptr-prom));
+ 		nfiles++;
+ 		ifd = open(argv[i], O_RDONLY);
+ 		if (ifd == -1) {
+diff -ru a/os/unix/fsys.c b/os/unix/fsys.c
+--- a/os/unix/fsys.c	2026-09-22 12:23:36.045413695 +0200
++++ b/os/unix/fsys.c	2026-09-22 12:23:36.133414050 +0200
+@@ -1002,8 +1002,8 @@
+ 		goto error;
+ 	} else {
+ 		if (vflag > 1) {
+-			printf("Bootstrapped: %s [%d bytes]\n",
+-			    name, sbuf.st_size);
++			printf("Bootstrapped: %s [%ld bytes]\n",
++			    name, (long)sbuf.st_size);
+ 		}
+ 	}
+ error:
+@@ -1276,7 +1276,7 @@
+ 	int i;
+ 
+ 	tos = POP(stack);
+-	printf("Tos: %x\n", tos);
++	printf("Tos: %lx\n", tos);
+ 	PUSH(1, stack);
+ 	PUSH(2, stack);
+ 
+diff -ru a/os/unix/wrapper.c b/os/unix/wrapper.c
+--- a/os/unix/wrapper.c	2026-09-22 12:25:30.653940712 +0200
++++ b/os/unix/wrapper.c	2026-09-22 12:25:30.678940852 +0200
+@@ -375,7 +375,7 @@
+ static void
+ usage(void)
+ {
+-	printf(help_msg);
++	fputs(help_msg, stdout);
+ }
+ 
+ static void

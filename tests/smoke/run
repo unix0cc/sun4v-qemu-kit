@@ -1,0 +1,69 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# tests/smoke -- the shortest check that a firmware set is alive: boot it under QEMU and require two things in the console output:
+# the banner ("Sun Fire T2000") and, after it, OpenBoot's `ok` prompt as the last non-empty line. Nothing else; the banner header is
+# printed for a human, not compared. A few seconds.
+#
+#   tests/smoke/run FWDIR      FWDIR holds reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin (a `make all TARGET=legion` output)
+#   tests/smoke/run --build    build the legion set from this tree first (`make test`; needs the build requirements too), cached by a hash of
+#                              the tree so that an unchanged tree is not rebuilt (the cache: SMOKE_CACHE, `make test` gives $(WORKDIR)/smoke)
+#
+# Needs only qemu-system-sparc (REQUIREMENTS.LINUX, "Toolchain requirements"). legion only.
+# Exit: 0 pass; 1 the banner differs or there is no ok prompt; 2 could not run.  Env: TIMEOUT (default 30 s), QEMU.
+set -uo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); REPO=$(cd "$HERE/../.." && pwd)
+. "$HERE/../lib/qemu.sh"
+OUT=$(mktemp -d "${TMPDIR:-/tmp}/smoke.XXXXXX")
+if [ "${1:-}" = --build ]; then
+  # Build legion's set from this tree, but only when the tree changed: the set is cached under a hash of everything that goes into it
+  # (the files of src/ md/ build/ patches/ and config.mk, Makefile, config.auto.mk when ./configure wrote one), so a second `make test` does not rebuild.
+  # make passes SMOKE_CACHE inside WORKDIR (make clean removes it); run by hand, the cache is a directory of its own under TMPDIR.
+  CACHE=${SMOKE_CACHE:-${TMPDIR:-/tmp}/sun4v-qemu-kit-smoke.$(id -u)}
+  # The hash covers the files themselves (no git needed, so a tree from a zip or a tarball is hashed too).
+  KEY=$(cd "$REPO" && find src md build patches config.mk Makefile $([ -f config.auto.mk ] && echo config.auto.mk) -type f -not -path '*/__pycache__/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+  FW=$CACHE/legion-$KEY
+  if [ -e "$FW/reset.bin" ] && [ -e "$FW/q.bin" ] && [ -e "$FW/openboot.bin" ] && [ -e "$FW/nvram1" ] && [ -e "$FW/1up-md.bin" ] && [ -e "$FW/1up-hv.bin" ]; then
+    echo "smoke: firmware set unchanged since the last build (tree hash $KEY), reusing $FW"
+  else
+    echo "smoke: building legion's firmware set (tree hash $KEY) ..."
+    rm -rf "$CACHE"/legion-*; mkdir -p "$CACHE"       # one cached set at a time
+    make -s -C "$REPO" all TARGET=legion TOOLCHAIN=gnu OUTDIR="$FW" WORKDIR="$CACHE/work" > "$OUT/build.log" 2>&1 \
+        || { echo "smoke: firmware build failed, see $OUT/build.log" >&2; rm -rf "$FW"; make -s -C "$REPO" workdir-clean OUTDIR="$FW" WORKDIR="$CACHE/work" >/dev/null 2>&1; exit 2; }
+    make -s -C "$REPO" workdir-clean OUTDIR="$FW" WORKDIR="$CACHE/work" >/dev/null 2>&1
+  fi
+else
+  FW=${1:-}
+  [ -n "$FW" ] || { echo "usage: tests/smoke/run FWDIR | --build" >&2; exit 2; }
+fi
+for f in reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin; do [ -e "$FW/$f" ] || { echo "smoke: $FW/$f missing" >&2; exit 2; }; done
+resolve_qemu; print_qemu
+MEM=$(cut -d'|' -f4 "$FW/.md-signature" 2>/dev/null); MEM=${MEM:-${MD_MEM:-2048}}   # -m must equal the set's MD_MEM
+head -c 1048576 /dev/zero > "$OUT/zero.img"       # legion's disk node needs a pflash drive to exist; nothing reads it here
+# QEMU never exits by itself, so poll the console: stop as soon as OpenBoot prints its ok prompt, or give up after TIMEOUT seconds.
+( cd "$OUT" && exec "$Q" -M niagara -accel tcg,thread=single -m "$MEM" -L "$(cd "$FW" && pwd)" \
+    -drive if=pflash,file="$OUT/zero.img",format=raw,readonly=on -display none -monitor none -serial stdio \
+    < /dev/null > "$OUT/console.raw" 2> "$OUT/qemu.err" ) &
+QPID=$!
+for _ in $(seq 1 $(( ${TIMEOUT:-30} * 10 ))); do
+  kill -0 "$QPID" 2>/dev/null || break
+  tr -d '\r' < "$OUT/console.raw" | grep -q '^ok $' && break
+  sleep 0.1
+done
+kill "$QPID" 2>/dev/null; wait "$QPID" 2>/dev/null
+# strip CRs and terminal escapes
+sed -e 's/\r//g' -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$OUT/console.raw" > "$OUT/console.txt"
+if ! grep -q 'Sun Fire T2000' "$OUT/console.txt"; then
+  echo "FAIL: no banner (\"Sun Fire T2000\") within ${TIMEOUT:-30}s -- the hypervisor or OpenBoot did not come up (a hypervisor that rejects its MD prints nothing at all)" >&2
+  echo "      console: $OUT/console.txt   qemu stderr: $OUT/qemu.err" >&2; exit 1
+fi
+# the ok prompt must be the LAST non-empty line and come after the banner line
+last=$(grep -v '^[[:space:]]*$' "$OUT/console.txt" | tail -1 | sed 's/[[:space:]]*$//')
+banner_line=$(grep -n 'Sun Fire T2000' "$OUT/console.txt" | head -1 | cut -d: -f1)
+ok_line=$(grep -n '^ok[[:space:]]*$' "$OUT/console.txt" | tail -1 | cut -d: -f1)
+if [ "$last" != ok ] || [ -z "$ok_line" ] || [ "$ok_line" -le "$banner_line" ]; then
+  echo "FAIL: the banner is there but OpenBoot did not end at its ok prompt (last line: '$last'); console: $OUT/console.txt" >&2; exit 1
+fi
+sed -n '/Sun Fire T2000/,/Host ID/p' "$OUT/console.txt" | head -8 | sed 's/^/      /'
+echo "ok  smoke: banner seen and OpenBoot is at its ok prompt"
+rm -rf "$OUT"

@@ -1,0 +1,77 @@
+Build requirements -- Solaris on SPARC
+======================================
+
+Packages
+--------
+Solaris 10 1/13 (s10u11), installed with the SUNWCall (Entire Distribution) or
+SUNWCXall (Entire Distribution plus OEM support) cluster. Packages, and what
+they provide:
+
+    SUNWgmake                   gmake, /usr/sfw/bin/gmake
+    SUNWflexlex                 flex, /usr/sfw/bin/flex
+    SUNWbinutils                gobjcopy, /usr/sfw/bin/gobjcopy
+    SUNWgpch                    gpatch, /usr/bin/gpatch (not /usr/bin/patch)
+    SUNWsprot + patch 118683-15 /usr/ccs/bin/as (see Assembler below)
+    base OS                     /usr/ccs/bin/make, ld, size, mcs (SUNWbtool;
+                                the hv build strips Sun cc's debug stubs from
+                                its objects with it); /usr/ccs/lib/cpp
+                                (traditional cpp); /usr/bin/perl
+    Sun Studio                  cc, /opt/SUNWspro/bin/cc, or any other Sun
+                                compiler in a different path (tested with:
+                                build_matrix; see Compiler below)
+    git (optional)              /opt/csw/bin/git, from OpenCSW; on PATH
+
+stabs and aschk are built from src/hypervisor/src/support.
+
+git gives the commit id and date to the build stamp (build/stamp.sh). Without
+it the OpenBoot banner says "git unknown" instead of the commit id.
+
+gmake, not Sun/SysV make: the top-level Makefile is GNU-make syntax and shells
+out to /usr/ccs/bin/make for Sun's own makefiles. A sun-path build uses both.
+Running `make` instead of `gmake` stops with a message that says so.
+/usr/sfw/bin is not on the default PATH: add it, or give the full path
+(/usr/sfw/bin/gmake).
+
+Overrides: SUN_STUDIO=, AS_SUN=, LD_SUN=, FLEX=, PATCH=, OBJCOPY_SUN=.
+Which Studio is used, and how ./configure picks it: README.configure.
+
+./configure (optional; it runs under Solaris 10's /bin/sh) finds the Studio,
+checks that its cc compiles and that as, gpatch and gobjcopy are usable, and
+records what this particular cc needs: README.configure.
+
+Whether a smaller install cluster has these packages was not checked (see
+SUNWCXall above).
+
+
+Compiler
+--------
+Sun Studio 11 (/opt/SUNWspro, cc 5.8), installed separately:
+Solaris 10 6/06 Developer Tools, Update 2, file
+Sol10.0606.DeveloperToolsU2.iso, https://archive.org/details/Solaris_10_0606_Dev
+
+Built with Sun Studio 11 to Oracle Developer Studio 12.6, each a full install
+in its own /opt directory: build_matrix. 12.5 and 12.6 need VIS declared on
+the guest (isainfo -v lists vis): build_matrix.
+
+The PROM's Forth engine is a 64-bit program (cc -xarch=v9), so the Studio needs
+its 64-bit packages. ./configure links a 64-bit program and stops with that
+message if it cannot.
+
+
+Assembler
+---------
+The hypervisor is assembled with -xarch=v9d. Only /usr/ccs/bin/as with patch
+118683-15 or later accepts it. The as on the s10u11 media (118683-07) and Sun
+Studio 11's own assembler (bin/fbe, which its cc driver calls) reject it.
+
+Take patch 118683-15 or a later revision, for example from the /patches
+directory of the Oracle Developer Studio 12.6 distribution:
+https://www.oracle.com/tools/developerstudio/downloads/developer-studio-jsp.html
+Only the patch is required, not Studio 12.6 itself. With the patch:
+
+    $ /usr/ccs/bin/as -V
+    /usr/ccs/bin/as: Studio 12.5 Compiler Common 12.5 SunOS_sparc
+        Patch 05/02/2016
+
+`gmake hv_reset` assembles a test instruction before the build and stops with
+a message if the assembler rejects it.

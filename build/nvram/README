@@ -1,0 +1,45 @@
+nvram1
+======
+
+    make nvram
+
+Produces 8192 zero bytes. That is the correct content: nothing in this firmware
+reads the file (no nvram dropin, no hypervisor call for it). QEMU only requires
+that it exists and is 0x2000 bytes, or it exits.
+
+OBP's real configuration comes from the guest MD instead -- see ../../md/README.
+
+The generator
+-------------
+    python3 build/nvram/mknvram.py --parse <image>       decode one
+    python3 build/nvram/mknvram.py -o nvram1 [--set K=V] generate one
+
+`make nvram` does not call it: python3 is not on every Solaris host, dd is.
+
+It is kept because the format is undocumented and this is the only decoding of
+it available. Layout, derived from the OBP sources in src/obp:
+
+    0x0000  nvfixed    0x40      no validity check
+    0x0040  nvhash     0x1ee0    4-byte magic, then an append-only record log
+    0x1f20  keystore   0x100
+
+    record:  4  hash   big-endian, bit 31 set
+             1  crc    simple-crc(data, seed = len)
+             2  len    big-endian
+             N  data
+             a hash of 0xffffffff ends the log
+
+Variable names are not stored, only 32-bit hashes. A string value is
+`<count><chars><NUL>`; a boolean is one byte, 0x00 or 0xff.
+
+Not done: making it mean something
+----------------------------------
+In order of cost. The first two give read-only NVRAM:
+
+  1. Add an nvram dropin to arch/sun4v/niagara/release/dropins.src, so OBP has
+     a driver at all.
+  2. Implement hypercalls 0xf2 (read) and 0xf3 (write) in the hypervisor.
+  3. For persistence, make QEMU write the region back --
+     memory_region_init_ram_from_file(..., RAM_SHARED, ...) instead of a rom
+     load. Wants an explicit machine option rather than writing to whatever -L
+     found.

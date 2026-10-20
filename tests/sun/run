@@ -1,0 +1,72 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the sun-path gate: on Solaris, build with Sun's own toolchain (TOOLCHAIN=sun) and check what the build produced.
+# The other gates need the gnu path (QEMU, python3, sha256sum, the GNU cross compiler) and do not run here; this one needs only
+# what the sun build itself needs (REQUIREMENTS.SOLARIS) and bash, strings and digest(1).
+#
+#   MD blobs    the configs' guest and hypervisor MDs, built by the sun path, hash to tests/full/md/expected/blobs.sha256
+#               (the pins the gnu path is held to: the two paths give the same bytes)
+#   hv          q.bin and reset.bin are built, and q.bin carries no build directory and no cc command line (the debug stubs
+#               Sun cc leaves in every object are removed before the link, patches/hv/hv-sun-strip-debug.patch)
+#
+# What it does not do: boot anything (no QEMU here). To boot a sun-built set, copy $OUTDIR/hv/{q.bin,reset.bin} next to the OBP
+# and MD files of a full `make all TOOLCHAIN=sun` and run tests/smoke/run <dir> or tests/full/login/run <dir> on a Linux host.
+#
+# Usage: run          Env: OUTDIR (scratch, default a new directory under $TMPDIR), MAKE (default gmake), SOURCE_DATE_EPOCH (kept)
+# Exit:  0 passed; 1 a check failed; 2 could not run; 3 skipped (not Solaris).
+set -u
+HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd "$HERE/../.." && pwd)
+if [ "$(uname -s)" != SunOS ]; then echo "skip  sun gate: it runs on Solaris, with the sun path (TOOLCHAIN=sun)"; exit 3; fi
+MAKE=${MAKE:-gmake}
+command -v "$MAKE" >/dev/null 2>&1 || { echo "cannot run: $MAKE not found (gmake is in /usr/sfw/bin; set MAKE=)" >&2; exit 2; }
+command -v strings >/dev/null 2>&1 || { echo "cannot run: strings not found (/usr/ccs/bin)" >&2; exit 2; }
+KEEP=1   # make passes an OUTDIR inside WORKDIR: kept for inspection, removed by make clean
+if [ -n "${OUTDIR:-}" ]; then OUT=$OUTDIR
+else OUT=$(mktemp -d "${TMPDIR:-/tmp}/sun-test.XXXXXX"); KEEP=
+fi
+mkdir -p "$OUT"
+fails=0
+ok()  { echo "ok  $*"; }
+bad() { echo "FAIL  $*"; fails=$((fails + 1)); }
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d' ' -f1; else digest -a sha256 "$1"; fi; }
+
+# ---- MD blobs --------------------------------------------------------------------------------------------------------
+if "$MAKE" -s -C "$REPO" md TARGET=all TOOLCHAIN=sun OUTDIR="$OUT/md" WORKDIR="$OUT/work-md" > "$OUT/md.log" 2>&1; then
+  n=0
+  while read -r want path; do
+    [ -n "$path" ] || continue
+    n=$((n + 1))
+    got=$(sha "$OUT/md/$path" 2>/dev/null)
+    if [ "$got" = "$want" ]; then ok "$path  $(echo "$got" | cut -c1-16)  == expected/blobs.sha256"
+    else bad "$path  got ${got:-nothing}, expected $want"; fi
+  done < "$REPO/tests/full/md/expected/blobs.sha256"
+  [ "$n" -gt 0 ] || bad "tests/full/md/expected/blobs.sha256 has no entries"
+else bad "make md TARGET=all TOOLCHAIN=sun failed, see $OUT/md.log"; fi
+
+# ---- hypervisor ------------------------------------------------------------------------------------------------------
+if "$MAKE" -s -C "$REPO" hv_reset TOOLCHAIN=sun TARGET=legion OUTDIR="$OUT/hv" WORKDIR="$OUT/work-hv" > "$OUT/hv.log" 2>&1; then
+  for f in q.bin reset.bin; do
+    if [ -s "$OUT/hv/$f" ]; then ok "$f built, $(wc -c < "$OUT/hv/$f" | tr -d ' ') bytes"; else bad "$f missing or empty in $OUT/hv"; fi
+  done
+  if [ -s "$OUT/hv/q.bin" ]; then
+    hits=$(strings "$OUT/hv/q.bin" | egrep -c "$REPO|$OUT|SUNWspro|solarisstudio|sunstudio|developerstudio")
+    if [ "$hits" = 0 ]; then ok "q.bin: no build directory and no cc command line"; else bad "q.bin: $hits string(s) with the build directory or the cc command line"; fi
+    strings "$OUT/hv/q.bin" | grep "Hypervisor 0.1" > /dev/null && ok "q.bin: version string present" || bad "q.bin: no version string"
+  fi
+else bad "make hv_reset TOOLCHAIN=sun failed, see $OUT/hv.log"; fi
+
+# ---- work directory --------------------------------------------------------------------------------------------------
+# build/workdir.sh under Solaris' own sh, awk, cksum and id: the same cases as `make workdir-verify`.
+if sh "$REPO/tests/full/workdir/run" > "$OUT/workdir.log" 2>&1; then ok "work directory: made with a marker, cleaning removes only that ($(grep -c '^ok' "$OUT/workdir.log") cases)"
+else bad "the work directory tests failed, see $OUT/workdir.log"; fi
+
+# the Makefile's guards under Solaris' make, sh, ps and expr
+if sh "$REPO/tests/full/guards/run" > "$OUT/guards.log" 2>&1; then ok "guards: the Makefile refuses what it should ($(grep -c '^ok' "$OUT/guards.log") cases)"
+else bad "the guards tests failed, see $OUT/guards.log"; fi
+
+if [ "$fails" = 0 ]; then
+    if [ -n "$KEEP" ]; then echo "sun tests: all passed (logs in $OUT)"; else rm -rf "$OUT"; echo "sun tests: all passed"; fi
+    exit 0
+fi
+echo "sun tests: $fails failed (logs in $OUT)"; exit 1

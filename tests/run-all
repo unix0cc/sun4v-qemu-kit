@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+"""run-all -- the whole test suite, one result format, one table.
+
+    make test-all                  or  tests/run-all           (also: make test-full, make tests-full)
+    tests/run-all -v               show every gate's output as it runs (default: only the result line, and the tail of a failure)
+    tests/run-all --only md,boot   run these gates only          --skip login   leave these out
+    tests/run-all --list           the gates and what each one needs
+    tests/run-all --color never|always|auto     (auto: colour and box lines when stdout is a terminal that can show them;
+                                                NO_COLOR and TERM=dumb turn colour off)
+
+The gates, in this order (each is a make target, so its environment is the one `make` gives it):
+    smoke     make test           banner and the OpenBoot `ok` prompt
+    md        make md-verify      every MD: hashes, mdlint, graph, pinned blobs
+    boot      make boot-verify    legion to `ok`: device tree, properties, MD <-> OpenBoot
+    hv        make hv-verify      q.bin / reset.bin: GNU as vs Sun as, offsets.h
+    workdir   make workdir-verify the work directory: made with a marker, and cleaning removes nothing that is not ours
+    guards    make guards-verify  what the Makefile refuses before it builds (MD_MEM, paths, a moved tree, two machines or two makes in one OUTDIR)
+    tools     make tools-verify   the result of a gate (exit 0 with a FAIL line is a FAIL) and the release's md/ bundle, on hand-made input
+    obp       make obp-verify     openboot.bin against Sun's own images
+    login     make login-verify   legion to Solaris's `console login:`      needs GUEST_DISK=<image>, else SKIP
+    sun       make sun-verify     sun path only (Solaris): sun-built MDs against the pinned hashes, q.bin without the build directory
+
+PASS: the gate exited 0 and printed at least one result line.  FAIL: it exited with anything else, or exited 0 having printed none
+(a gate that checked nothing has not passed); the last lines of its output are shown, the whole log is kept.
+SKIP: the gate said it cannot run here (exit 3), or a precondition is missing. "Checks" is the number of result lines the
+gate printed (`ok ...`, `PASS ...`, `FAIL ...`): a size, not a promise that two gates count alike.
+Exit code: 0 when nothing failed (a SKIP is not a failure), 1 otherwise. Logs: $OUT/<gate>.log (OUT, default a new
+directory under $TMPDIR). On the sun path (TOOLCHAIN=sun, Solaris) the gnu gates are shown as SKIP with the reason and only the sun gate runs; it is
+not shown on the gnu path (run it there: nothing, it needs Solaris)."""
+import argparse, os, re, shutil, subprocess, sys, time
+
+ap = argparse.ArgumentParser(description=__doc__.split('\n')[0], add_help=True)
+ap.add_argument('-v', '--verbose', action='store_true')
+ap.add_argument('--only'); ap.add_argument('--skip'); ap.add_argument('--list', action='store_true')
+ap.add_argument('--color', choices=('auto', 'always', 'never'), default='auto')
+ap.add_argument('--tail', type=int, default=25, help='lines of a failed gate shown (default 25)')
+a = ap.parse_args()
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# name, make target, what it needs
+# name, make target, what it needs, path ('gnu' / 'sun'), why it cannot run on the other path
+GATES = [('smoke', 'test', None, 'gnu', 'needs QEMU and the GNU cross compiler'),
+         ('md', 'md-verify', None, 'gnu', 'needs sha256sum and python3'),
+         ('boot', 'boot-verify', None, 'gnu', 'needs QEMU'),
+         ('hv', 'hv-verify', None, 'gnu', 'checks the GNU port of the hypervisor'),
+         ('workdir', 'workdir-verify', None, 'gnu', 'its cases are in tests/full/workdir; the sun gate runs them on Solaris'),
+         ('guards', 'guards-verify', None, 'gnu', 'its cases are in tests/full/guards; the sun gate runs them on Solaris'),
+         ('tools', 'tools-verify', None, 'gnu', 'needs GNU tar and bash; the sun gate does not run it'),
+         ('obp', 'obp-verify', None, 'gnu', 'compares the gnu build with Sun\'s own images'),
+         ('login', 'login-verify', 'GUEST_DISK', 'gnu', 'needs QEMU'),
+         ('sun', 'sun-verify', None, 'sun', 'runs on Solaris with the sun path')]
+SUN = os.environ.get('TOOLCHAIN') == 'sun' or any(x == 'TOOLCHAIN=sun' for x in os.environ.get('MAKEFLAGS', '').split())
+
+if a.list:
+    for n, t, need, path, why in GATES: print('%-6s make %-14s %-4s path  %s' % (n, t, path, ('needs ' + need) if need else ''))
+    sys.exit(0)
+
+tty = sys.stdout.isatty()
+use_color = a.color == 'always' or (a.color == 'auto' and tty and 'NO_COLOR' not in os.environ and os.environ.get('TERM', 'dumb') != 'dumb')
+enc = (sys.stdout.encoding or '').lower()
+uni = a.color == 'always' or (a.color == 'auto' and tty and 'utf' in enc and os.environ.get('TERM', 'dumb') != 'dumb')
+def C(code, s): return '\033[%sm%s\033[0m' % (code, s) if use_color else s
+GREEN, RED, YEL, DIM, BOLD = '32', '31;1', '33', '2', '1'
+MARK = {'PASS': ('✔' if uni else '+'), 'FAIL': ('✘' if uni else 'x'), 'SKIP': ('○' if uni else '-')}
+COL = {'PASS': GREEN, 'FAIL': RED, 'SKIP': YEL}
+
+
+only = set(a.only.split(',')) if a.only else None
+skip = set(a.skip.split(',')) if a.skip else set()
+names = [g[0] for g in GATES]
+for n in (only or set()) | skip:
+    if n not in names: sys.exit('run-all: unknown gate %r (have: %s)' % (n, ' '.join(names)))
+
+import tempfile
+OUT = os.environ.get('OUT') or tempfile.mkdtemp(prefix='sun4v-qemu-kit-test-all-' + time.strftime('%Y%m%d-%H%M%S') + '-', dir=os.environ.get('TMPDIR') or None)   # not a name anybody can guess
+os.makedirs(OUT, exist_ok=True)
+ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+RE_OK = re.compile(r'^\s*(?:ok|PASS)\b'); RE_BAD = re.compile(r'^\s*(?:FAIL|FAILED|not ok)\b')
+
+def rev():
+    try:
+        r = subprocess.run(['git', '-C', REPO, 'rev-parse', '--short', 'HEAD'], capture_output=True, text=True).stdout.strip()
+        d = subprocess.run(['git', '-C', REPO, 'status', '--porcelain', '--untracked-files=no'], capture_output=True, text=True).stdout.strip()
+        return r + ('-dirty' if d else '')
+    except Exception: return '?'
+
+print(C(BOLD, 'sun4v-qemu-kit %s   test-all (%s path)' % (rev(), 'sun' if SUN else 'gnu')))
+print(C(DIM, 'logs: %s' % OUT))
+print()
+
+results = []   # name, result, ok_checks, bad_checks, seconds, note
+t_all = time.time()
+try:
+    for name, target, need, path, why in GATES:
+        if (only and name not in only) or name in skip: continue
+        if path == 'sun' and not SUN: continue                       # the sun gate is not shown on the gnu path
+        if path == 'gnu' and SUN:                                    # masked on the sun path, with the reason
+            results.append((name, 'SKIP', 0, 0, 0.0, 'gnu path only: ' + why))
+            print('%s %-6s %s' % (C(COL['SKIP'], MARK['SKIP'] + ' SKIP'), name, C(DIM, results[-1][5]))); continue
+        if need and not (os.environ.get(need) and os.path.exists(os.environ[need])):
+            results.append((name, 'SKIP', 0, 0, 0.0, '%s not set' % need if not os.environ.get(need) else '%s: no such file' % need))
+            print('%s %-6s %s' % (C(COL['SKIP'], MARK['SKIP'] + ' SKIP'), name, C(DIM, results[-1][5]))); continue
+        log = os.path.join(OUT, name + '.log')
+        if a.verbose: print(C(BOLD, '== %s: make %s' % (name, target)), flush=True)
+        elif tty: print(C(DIM, '  ... %-6s make %s' % (name, target)), flush=True)          # replaced by the result line below
+        t0 = time.time()
+        with open(log, 'wb') as lf:
+            env = dict(os.environ, RUN_ALL='1')                       # the gates leave the result line to this runner
+            p = subprocess.Popen(['make', '-s', '-C', REPO, target], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env)
+            for line in iter(p.stdout.readline, b''):
+                lf.write(line)
+                if a.verbose: sys.stdout.buffer.write(line); sys.stdout.buffer.flush()
+            rc = p.wait()
+        dt = time.time() - t0
+        text = ANSI.sub('', open(log, errors='replace').read())
+        lines = text.split('\n')
+        nok = sum(1 for l in lines if RE_OK.match(l)); nbad = sum(1 for l in lines if RE_BAD.match(l))
+        skiplines = [l.strip() for l in lines if l.startswith('skip')]
+        if rc == 0 and nok == 0 and nbad == 0 and skiplines:        # a gate that printed `skip ...` and exited 3 (make hides the 3)
+            res, note = 'SKIP', skiplines[0][4:].strip()
+        else:
+            if rc != 0: res, note = 'FAIL', 'exit %d' % rc
+            elif nbad: res, note = 'FAIL', 'exit 0, but the gate printed %d FAIL line(s)' % nbad
+            elif nok + nbad == 0: res, note = 'FAIL', 'exit 0, but the gate printed no ok/PASS/FAIL line: it checked nothing'
+            else: res, note = 'PASS', ''
+        results.append((name, res, nok, nbad, dt, note))
+        if not a.verbose and tty: sys.stdout.write('\033[1A\033[2K')            # replace the "..." line
+        print('%s %-6s %s' % (C(COL[res], MARK[res] + ' ' + res), name, C(DIM, '%d checks, %.1f s%s' % (nok + nbad, dt, (', ' + note) if note else ''))), flush=True)
+        if res == 'FAIL':
+            tail = [l for l in lines if l.strip()][-a.tail:]
+            for l in tail: print(C(DIM, '      | ') + l[:200])
+            print(C(DIM, '      | (whole log: %s)' % log))
+except KeyboardInterrupt:
+    print('\n' + C(YEL, 'interrupted'))
+
+# ---- the table --------------------------------------------------------------------------------------------------------
+print()
+heads = ['Gate', 'Result', 'Checks', 'Time']
+rows = [[n, r, str(o + b) + (' (%d failed)' % b if b else ''), '%.1f s' % t] for n, r, o, b, t, _ in results]
+npass = sum(1 for r in results if r[1] == 'PASS'); nfail = sum(1 for r in results if r[1] == 'FAIL'); nskip = sum(1 for r in results if r[1] == 'SKIP')
+tot_checks = sum(r[2] + r[3] for r in results)
+foot = ['%d gates' % len(results), '%d PASS  %d FAIL  %d SKIP' % (npass, nfail, nskip), str(tot_checks), '%.1f s' % (time.time() - t_all)]
+w = [max(len(x[i]) for x in [heads] + rows + [foot]) for i in range(4)]
+H, V, TL, TM, TR, ML, MM, MR, BL, BM, BR = ('─', '│', '┌', '┬', '┐', '├', '┼', '┤', '└', '┴', '┘') if uni else \
+                                          ('-', '|', '+', '+', '+', '+', '+', '+', '+', '+', '+')
+def line(l, m, r): return l + m.join(H * (x + 2) for x in w) + r
+def row(cells, color=None):
+    out = []
+    for i, c in enumerate(cells):
+        pad = c.ljust(w[i])
+        if color and i == 1: pad = C(color, pad)
+        out.append(' ' + pad + ' ')
+    return V + V.join(out) + V
+print(line(TL, TM, TR)); print(row([C(BOLD, h) if False else h for h in heads])); print(line(ML, MM, MR))
+for r in rows: print(row(r, COL[r[1]]))
+print(line(ML, MM, MR))
+print(row(foot, RED if nfail else (GREEN if npass else YEL)))
+print(line(BL, BM, BR))
+verdict = 'FAIL' if nfail else ('PASS' if npass else 'SKIP')
+print(C(COL[verdict], '%s %s' % (MARK[verdict], {'PASS': 'all gates passed' + (' (%d skipped)' % nskip if nskip else ''),
+                                                  'FAIL': '%d gate(s) failed' % nfail, 'SKIP': 'nothing ran'}[verdict])))
+sys.exit(1 if nfail else 0)

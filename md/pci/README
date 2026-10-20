@@ -1,0 +1,79 @@
+md/pci -- PCIe root complex, e1000 + cmd646 IDE
+===============================================
+An e1000 NIC (bound by the Ophir FCode in src/obp) and a cmd646 IDE controller;
+no Legion disk.
+
+    make md  TARGET=pci
+    make all TARGET=pci
+
+Needs a QEMU with vpci and cmd646 support (not in upstream yet) and patches/
+(applied at build time).
+
+QEMU command line
+-----------------
+    qemu-system-sparc64 -M niagara -accel tcg,thread=single -L <outdir> \
+        -m 4096 -serial mon:stdio -nographic \
+        -netdev user,id=net0 \
+        -device e1000,netdev=net0,addr=0x0,mac=52:54:00:66:00:20,romfile= \
+        -device cmd646-ide,id=ide0,addr=0x2 \
+        -drive if=none,id=disk0,file=<disk.img>,format=raw \
+        -device ide-hd,drive=disk0,bus=ide0.0,unit=0
+
+-accel tcg,thread=single matters for long workloads such as an OS install:
+without it multi-hour stalls were measured (lock contention in QEMU's
+multi-threaded TCG).
+
+    net    /pci@0/network@0         e1000 at PCI device 0
+    disk   /pci@0/ide@2/disk@0      cmd646 IDE at device 2, primary master
+    cdrom  /pci@0/ide@2/cdrom@1,0   primary slave
+
+Tested by hand (no gate boots pci): Solaris 10 u11 on cmd646 boots to the login
+prompt, root logs in, e1000g1 comes up, 200 MB written and read on the disk
+without an error. OpenSolaris b134 (the install image on the cmd646 CD drive)
+reaches "Enter user name for system maintenance". See build_matrix, section 8.
+
+What is in the guest MD (md/pci/1up.pdesc)
+------------------------------------------
+Everything not listed here is as in md/legion/1up.pdesc (common.pdesc, cpu,
+memory, platform). The pci machine differs from legion in these places. Where a
+value comes from is also in md/REFERENCE, part 2.
+
+The iodevice node pci_bus (under phys_io)
+    Most property lines are those of T2-archive:t1_fpga/src/xilinx/configs/
+    1c1t_guest.desc, which describes the same hardware (device-type "pciex").
+    The values are set by code: md/REFERENCE part 2 names the readers, "The
+    iodevice values" at its end what sets each.
+    Not taken from that file: name, pseudonym, ino-bitmap (nothing reads them,
+    md/REFERENCE note 38).
+    Different here (ours):
+        probe-list           "0,1,2" (e1000 at 0, spare slot 1, IDE at 2);
+                             there "0"
+        interrupt-map-mask   keeps all five device-number bits (0xfff8)
+        bus-ranges           starts at bus 0 (there 2: a PCIe switch sits in
+                             front)
+
+Ours, with the example of 1c1t_guest.desc
+    The interrupt-map-entry nodes, one per slot.
+    child-interrupt 1, parent-interrupt 0x14..0x16 and parent-device-path
+    /pci@0 are the values of the example; it has four entries (INTA..INTD of
+    one device), we have three (INTA of three devices) with other
+    child-unit-address values.
+    Node format: FWARC 2007/386.
+
+Must agree with the hypervisor MD
+    pci_bus.cfg-handle 0 = pcie_bus.cfghandle of md/pci/1up.hdesc.
+    OBP names the node /pci@<cfg-handle>, so this 0 is the "pci@0" of the
+    device paths.
+
+Ours only
+    aliases net, disk, disk0, cdrom and boot-device "disk disk0 cdrom"
+        the device paths of the QEMU command line above
+    platform mac-address 0x525400660020
+        equal to the MAC of -device e1000,mac=, so the banner and the
+        interface agree
+    no pci-network node: the Ophir FCode reads the MAC from the NIC (see the
+        comment in 1up.pdesc)
+
+Removed from legion
+    the virtual-device disk node (and its fwd arc), the alias vdisk,
+    boot-device "disk"

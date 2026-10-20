@@ -1,0 +1,15 @@
+# Passed to ld as a second -M after Sun's own mapfile.q / dumbreset/mapfile.
+#
+# /usr/ccs/bin/as (patch 118683-15) adds a .SUNW_cap section (hardware
+# capabilities, CA_SUNW_HW_1 = VIS) to every object it assembles with
+# -xarch=v9d. ld then places that section in its own PT_LOAD after .bss, at
+# 0xfff0c00000, and _etext moves there with it (from 0xfff003d1ee to
+# 0xfff0c00020). start_master (main.s) uses _etext as the end of the image it
+# scrubs and copies from ROM to RAM. With the section present it would copy
+# 12 MB instead of 250 KB.
+#
+# This zeroes the capability mask. With no capabilities left ld emits no
+# .SUNW_cap section and _etext stays where it belongs. Measured 2026-09-14:
+# with this file q.bin matches the build made with the assembler Sun shipped
+# in all but one byte (a build timestamp digit), reset.bin matches exactly.
+hwcap_1 = V0x0 OVERRIDE;

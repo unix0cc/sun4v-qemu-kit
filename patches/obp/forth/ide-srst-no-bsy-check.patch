@@ -1,0 +1,18 @@
+IDE probe: don't require BSY during software reset.
+
+The IDE driver asserts SRST, waits 1 ms, then checks that BSY came up to
+decide a drive is present. QEMU finishes the reset from a bottom half well
+inside that 1 ms, so BSY reads clear and every drive is called Not Present.
+Drop the BSY check -- the reset itself still runs. Build-tree only, never
+src/obp.
+
+--- a/obp/dev/ide/ide.fth	2026-08-29 22:56:08.486983760 +0200
++++ b/obp/dev/ide/ide.fth	2026-08-29 22:56:08.500983823 +0200
+@@ -278,6 +278,6 @@
+ : (reset) ( check? -- ok? )
+    6 2 ctrl!
+    1 ms
+-   if  1 wait-busy?  else  true  then
++   drop true
+    2 2 ctrl!
+ ;

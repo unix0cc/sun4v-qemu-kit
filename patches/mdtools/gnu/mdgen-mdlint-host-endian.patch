@@ -1,0 +1,114 @@
+mdgen/mdlint: build on a little-endian host.
+
+MDESC is a network-byte-order format and Sun built on SPARC, so their
+hton/ntoh macros are identity and the little-endian arm of the #if is just
+`#error FIXME`. Three files carry that block; add a real arm keyed on
+__BYTE_ORDER__ (identity for big-endian GCC, <byteswap.h> for little).
+
+output_bin.c also has a genuine Sun bug: the PE_int case writes prop_val with
+no swap, while the PE_arc case just above it applies hton64(). Invisible on
+big-endian, so unfixed from mdgen 1.1 through the 1.2 vendored here; without
+it every integer property comes out byte-reversed and nothing warns. Wrap it
+in hton64() to match the arc case.
+
+mdlint.c compares the header's transport_version with MD_TRANSPORT_VERSION without
+ntoh32, so on a little-endian host it rejects every MD it is given with "Unrecognised
+transport version" (the 1.0 version reads back as 0x00000100). The same check earlier in
+the file (the MD opener) is correct; wrap this one in ntoh32 to match.
+
+Applied to a throwaway copy of src/hypervisor/src/support by
+build/mdtools/gnu/build.sh (TOOLCHAIN=gnu path only -- the Sun path builds
+these unmodified). Never to src/.
+
+--- a/mdgen/output_bin.c	2026-09-08 18:56:00.817324284 +0200
++++ b/mdgen/output_bin.c	2026-09-08 18:56:00.835324367 +0200
+@@ -83,6 +83,21 @@
+ #define	ntoh16(_s)	((uint16_t)(_s))
+ #define	ntoh32(_s)	((uint32_t)(_s))
+ #define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++#define	hton16(_s)	((uint16_t)(_s))
++#define	hton32(_s)	((uint32_t)(_s))
++#define	hton64(_s)	((uint64_t)(_s))
++#define	ntoh16(_s)	((uint16_t)(_s))
++#define	ntoh32(_s)	((uint32_t)(_s))
++#define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++#include <byteswap.h>
++#define	hton16(_s)	bswap_16((uint16_t)(_s))
++#define	hton32(_s)	bswap_32((uint32_t)(_s))
++#define	hton64(_s)	bswap_64((uint64_t)(_s))
++#define	ntoh16(_s)	bswap_16((uint16_t)(_s))
++#define	ntoh32(_s)	bswap_32((uint32_t)(_s))
++#define	ntoh64(_s)	bswap_64((uint64_t)(_s))
+ #else
+ #error	FIXME: Define byte reversal functions for network byte ordering
+ #endif
+@@ -338,7 +353,7 @@
+ 
+ 			case PE_int:
+ 				mde.tag = DT_PROP_VAL;
+-				mde.d.prop_val = pep->u.val;
++				mde.d.prop_val = hton64(pep->u.val);
+ 				break;
+ 
+ 			case PE_arc:
+--- a/mdgen/output_text.c	2026-09-08 18:56:00.820324298 +0200
++++ b/mdgen/output_text.c	2026-09-08 18:56:00.835324367 +0200
+@@ -84,6 +84,21 @@
+ #define	ntoh16(_s)	((uint16_t)(_s))
+ #define	ntoh32(_s)	((uint32_t)(_s))
+ #define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++#define	hton16(_s)	((uint16_t)(_s))
++#define	hton32(_s)	((uint32_t)(_s))
++#define	hton64(_s)	((uint64_t)(_s))
++#define	ntoh16(_s)	((uint16_t)(_s))
++#define	ntoh32(_s)	((uint32_t)(_s))
++#define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++#include <byteswap.h>
++#define	hton16(_s)	bswap_16((uint16_t)(_s))
++#define	hton32(_s)	bswap_32((uint32_t)(_s))
++#define	hton64(_s)	bswap_64((uint64_t)(_s))
++#define	ntoh16(_s)	bswap_16((uint16_t)(_s))
++#define	ntoh32(_s)	bswap_32((uint32_t)(_s))
++#define	ntoh64(_s)	bswap_64((uint64_t)(_s))
+ #else
+ #error	FIXME: Define byte reversal functions for network byte ordering
+ #endif
+--- a/mdlint/basics.h	2026-09-08 18:56:00.822324307 +0200
++++ b/mdlint/basics.h	2026-09-08 18:56:00.835324367 +0200
+@@ -77,6 +77,21 @@
+ #define	ntoh16(_s)	((uint16_t)(_s))
+ #define	ntoh32(_s)	((uint32_t)(_s))
+ #define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
++#define	hton16(_s)	((uint16_t)(_s))
++#define	hton32(_s)	((uint32_t)(_s))
++#define	hton64(_s)	((uint64_t)(_s))
++#define	ntoh16(_s)	((uint16_t)(_s))
++#define	ntoh32(_s)	((uint32_t)(_s))
++#define	ntoh64(_s)	((uint64_t)(_s))
++#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++#include <byteswap.h>
++#define	hton16(_s)	bswap_16((uint16_t)(_s))
++#define	hton32(_s)	bswap_32((uint32_t)(_s))
++#define	hton64(_s)	bswap_64((uint64_t)(_s))
++#define	ntoh16(_s)	bswap_16((uint16_t)(_s))
++#define	ntoh32(_s)	bswap_32((uint32_t)(_s))
++#define	ntoh64(_s)	bswap_64((uint64_t)(_s))
+ #else
+ #error	FIXME: Define byte reversal functions for network byte ordering
+ #endif
+--- a/mdlint/mdlint.c
++++ b/mdlint/mdlint.c
+@@ -497,7 +497,7 @@
+ 		 * should do a lot more sanity checking here.
+ 		 */
+ 
+-	if (mdp->headerp->transport_version != MD_TRANSPORT_VERSION)
++	if (ntoh32(mdp->headerp->transport_version) != MD_TRANSPORT_VERSION)
+ 		fatal("Unrecognised transport version");
+ 
+ 		/*

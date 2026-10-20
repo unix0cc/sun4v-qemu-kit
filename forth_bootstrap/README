@@ -1,0 +1,153 @@
+forth_bootstrap/ -- avoiding forth.dic usage (experimental)
+===========================================================
+
+The problem
+-----------
+Sun's OpenBoot is built by a Forth METACOMPILER (src/obp/obp/fm/meta). A
+metacompiler needs a running Forth to execute it, and src/ has none in source
+form: the chain begins at one shipped binary, os/sun/sparc/forth.dic, which has
+no source of its own and (LICENSE) carries no licence header. Everything after
+it is rebuilt from source on every build.
+
+
+Use
+---
+Three ways to start the dictionary chain:
+
+    make obp                         the default: from Sun's forth.dic
+    OBP_SEED=kernel-xref make obp    from Sun's kernel-xref files in src/;
+                                     forth.dic is not read
+    make bootstrap-chain             kernel-xref made from source by cforth,
+                                     then the other dictionaries from it
+                                     (dictionaries only, no openboot.bin)
+
+So forth.dic (with the other dictionaries, which src/ keeps for reference) can
+be deleted, and the openboot.bin is the same: see "Try it".
+
+The targets:
+    make bootstrap-check             step 1 from source: Sun's metacompiler on
+                                     cforth/sparc32 -> kernel-xref.dic and both
+                                     listings, compared with the files
+                                     Sun shipped in src/
+    make bootstrap-chain             that derived seed -> forth32-xref,
+                                     k32t32-xref, f32t32, k64t32, tokenize on
+                                     the -m32 engine, with the fixpoint
+                                     assertion kernel-xref == k32t32-xref
+    make bootstrap-negative          a changed constant in a copy of the
+                                     sources must make bootstrap-check fail
+
+The bootstrap-* targets need the optional part of REQUIREMENTS.LINUX; without
+it they print SKIP. None of them is part of `make all`, `make test` or
+`make release`.
+
+
+Try it: delete forth.dic by hand
+--------------------------------
+Do it in a local clone: the repository keeps the file, because the default
+build, the sun path and PRISTINE-MANIFEST need it.
+
+0. The reference image, built the normal way (it is what the steps below are
+   compared with: ../with-forth-dic.bin):
+
+    git clone /path/to/sun4v-qemu-kit try && cd try
+    export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+    ./configure
+    echo >> README                       # "dirty" tree, as after the rm below
+    make obp
+    cp output/openboot.bin ../with-forth-dic.bin
+
+1. Without forth.dic, from Sun's kernel-xref files:
+
+    rm src/obp/obp/os/sun/sparc/forth.dic
+    make clean
+    OBP_SEED=kernel-xref make obp
+    cmp output/openboot.bin ../with-forth-dic.bin && echo identical
+    # The pair ../with-forth-dic.bin and openboot.bin must be the same in one
+    # environment: another compiler/environment gives a different pair.
+
+2. With no dictionary at all in the tree. cforth runs Sun's metacompiler on the
+   sources (cforth/sparc32 under qemu-user, see "How it works"), and the build
+   starts from what it wrote:
+
+    export FB_WORK=$PWD/../fbwork
+    make bootstrap-check                 # derives the seed, compares with Sun's
+    find . -name '*.dic' | wc -l         # 7 in a fresh clone, 6 after step 1
+    find . -name '*.dic' -delete
+    find . -name '*.dic' | wc -l         # 0
+    make clean
+    OBP_SEED=kernel-xref OBP_SEED_DIR=$FB_WORK/seed-cf make obp
+    cmp output/openboot.bin ../with-forth-dic.bin && echo identical
+
+Every dictionary the build uses is made from source: kernel-xref by cforth,
+the others (k32t32-xref, k64t32, forth32-xref, f32t32, tokenize) by the chain
+from it. The build reads the seed from $FB_WORK/seed-cf. The Forth sources stay,
+including Sun's listings kernel-xref.fth and kernel-xref.headless.fth: they
+begin with Sun's banner, which names the file, and bootstrap-check takes it
+from there.
+
+Two things keep the images equal. SOURCE_DATE_EPOCH: without it the build time
+goes into openboot.bin. And `echo >> README`: the version string carries the
+git state ("git 5f06d1a", or "git 5f06d1a-dirty" when a tracked file differs),
+and deleting a file makes the clone dirty, so the first build is made dirty
+as well. Without either, the images differ (the version string and the size;
+nothing else was compared).
+
+
+How it works
+------------
+The chain is drawn in ../docs/obp-chain.png (floor 0 is this directory).
+
+Step 1 of the chain, kernel-xref.dic and its two word listings, is normally
+made from forth.dic. Here it is made by Sun's own metacompiler running on
+cforth, Mitch Bradley's (FirmWorks) C-rooted Forth, MIT:
+https://github.com/MitchBradley/cforth, pinned commit
+353a969f07027361f44b3ff9c5b7059be5780274 (fetch.sh). cforth is fetched, not
+copied into this tree, and cross-built for sparc32.
+
+The result is compared with the three files Sun shipped in
+src/obp/obp/fm/kernel/sparc/ (PRISTINE-MANIFEST pins them). With
+OBP_SEED=kernel-xref, build/obp/gnu/tools/bootstrap-dics.sh starts from these
+files, or from the directory OBP_SEED_DIR names, and skips its first step;
+every later dictionary is built from source as before, and the fixpoint check
+(kernel-xref == k32t32-xref) still runs: it is what ties the seed to the
+sources.
+
+Why cforth: its root is C, so no binary kernel image is needed. Making it the
+host of Sun's metacompiler took four small fixes, all in host/ (STATE value,
+line-prefix words, alias semantics, token alignment) and none in src/.
+
+
+What is here
+------------
+    host/
+        About 160 lines of Forth that let cforth be the host of Sun's
+        metacompiler: shim.fth (missing words, Sun's fsyscall services,
+        alias/$create/does> with Sun's meaning and alignment), hooks.fth
+        (Sun's do-defined/$do-undefined/do-literal hooks in cforth's text
+        interpreter), xrefhooks.fth, pre.fth.
+    fetch.sh, build.sh
+        Clone cforth at the pinned commit into $FB_WORK and cross-build it
+        for sparc32 (sparc64-linux-gnu-gcc -m32 -static; one Makefile line
+        edited in a copy).
+    check-seed.sh       make bootstrap-check
+    chain.sh            make bootstrap-chain
+    tests/negative.sh   make bootstrap-negative
+
+
+What this shows, and what it does not
+-------------------------------------
+Shown: kernel-xref.dic, the root of the chain, is reproduced from Sun's sources
+by a Forth whose own root is C (cforth), on a host with Sun's ISA, byte order
+and cell size, without reading any dictionary binary of Sun's or FirmWorks'.
+Sun's kernel-xref files can therefore be derived from the sources, not taken on
+faith.
+
+Not shown, not changed:
+  * The normal build and `make release` still start from forth.dic. Nothing
+    here is in the release tarball.
+  * forth.dic stays in the repository: the sun path needs it, and so do
+    PRISTINE-MANIFEST and the src-intact test.
+  * SPARC code still runs at build time: cforth is cross-built for sparc32 and
+    runs under qemu-user, as does the engine.
+  * Only step 1 is replaced (floor 0 of ../docs/obp-chain.png). The later
+    steps (forth32-xref ... tokenize) are Sun's, on Sun's engine.

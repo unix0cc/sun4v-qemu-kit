@@ -1,0 +1,36 @@
+tests/sun -- the sun-path gate
+==============================
+
+    make sun-verify TOOLCHAIN=sun
+                                gmake on Solaris; tests/sun/run does the work
+
+On Solaris, with Sun's toolchain (REQUIREMENTS.SOLARIS), it builds the MDs of
+every config and the hypervisor of legion and checks:
+
+    - the four MD blobs hash to tests/full/md/expected/blobs.sha256, the pins
+      the gnu path is held to: both paths give the same bytes;
+    - q.bin and reset.bin are built, q.bin has its version string and carries
+      no build directory and no cc command line (Sun cc's debug stubs are
+      removed before the link, patches/hv/hv-sun-strip-debug.patch);
+    - the cases of tests/full/workdir and tests/full/guards (what the work
+      directory and the Makefile guards do on Solaris, with gmake 3.82).
+
+It needs only bash, strings, egrep and digest(1) besides the build's own
+tools. It does not boot anything: there is no QEMU here. To boot a sun-built
+set, take it to a Linux host and run tests/smoke/run <dir> or
+tests/full/login/run <dir>.
+
+Booting the sun-built sets:
+    tests/sun/login-sets DIR...
+    make sun-login-verify SETS="DIR..." GUEST_DISK=<image>
+run the login gate of tests/full/login once per set, on a Linux host, and
+print one line per set (`ok  NAME  login prompt ...` or `FAIL NAME ...`). A
+DIR is a firmware set or a directory with the set in DIR/set; the set is named
+after the DIR, so name the DIRs after the compilers that built them. Not part
+of test-all.
+
+On any other system it prints `skip` and exits 3 (make turns that into success
+and tests/run-all shows SKIP). Env: OUTDIR (scratch; the logs md.log and
+hv.log are kept there; `gmake sun-verify` gives it a directory inside WORKDIR,
+and without one the test uses $TMPDIR and removes it when it passed), MAKE
+(default gmake).

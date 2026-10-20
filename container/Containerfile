@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# Build image for sun4v-qemu-kit on the gnu path: a Debian or Ubuntu base + the packages of REQUIREMENTS.LINUX, tests included.
+# Default: Ubuntu 24.04. Other bases are build arguments, see container/README (Debian 13, Ubuntu 26.04).
+# The image holds the toolchain only; the source tree is mounted, so the image does not change with the tree.
+#
+#   podman build -t sun4v-qemu-kit-build -f container/Containerfile container
+#   podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build                    # make all  -> ./output
+#   podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build make release
+#   podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build make test-all
+# docker: the same without --userns=keep-id; add --user "$(id -u):$(id -g)" so that ./output is yours.
+#
+# `make bootstrap-check` needs the sparc binfmt_misc handlers (cforth's Makefile runs the SPARC binaries it builds): a container
+# cannot register them, it uses the HOST's (registered with flag F, as Debian/Ubuntu's qemu-user-static does). The login gate
+# needs a guest image:
+#   -v /path/to/images:/images:ro -e GUEST_DISK=/images/<image>
+ARG BASE=docker.io/library/ubuntu:24.04
+FROM ${BASE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+# GCCV: the major version of the distribution's default gcc (24.04: 13, Debian 13: 14, 26.04: 15).
+# QEMU_USER: the package with qemu-sparc64 / qemu-sparc32plus (qemu-user-static; Ubuntu 26.04 has only qemu-user).
+ARG GCCV=13
+ARG QEMU_USER=qemu-user-static
+
+# [ver] = GCCV (REQUIREMENTS.LINUX). libc6-dev: the host gcc builds mdgen, mdlint and didepend, and
+# libc6-dev is only a Recommends of gcc. git + ca-certificates: the commit in the banner, and `make bootstrap-check`
+# fetching cforth. qemu-system-sparc: `make test`, `boot-verify`, `test-all`. procps: ps, which build/lock.sh needs (no ps, no lock).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        gcc-sparc64-linux-gnu binutils-sparc64-linux-gnu \
+        libgcc-${GCCV}-dev-sparc64-cross libc6-dev-sparc64-cross \
+        gcc-${GCCV}-multilib-sparc64-linux-gnu lib32gcc-${GCCV}-dev-sparc64-cross libc6-dev-sparc-sparc64-cross \
+        ${QEMU_USER} qemu-system-sparc \
+        gcc cpp libc6-dev binutils make patch flex python3 perl gawk diffutils coreutils \
+        git ca-certificates procps \
+ && rm -rf /var/lib/apt/lists/*
+
+# The mounted tree belongs to another uid than root: without this git says "dubious ownership" and the banner reads "git unknown".
+RUN git config --system --add safe.directory /src
+
+WORKDIR /src
+CMD ["make", "all"]

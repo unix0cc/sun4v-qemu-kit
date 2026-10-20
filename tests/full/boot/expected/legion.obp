@@ -1,0 +1,184 @@
+## .version
+Release 4.x.build_122+qemu [ sun4v-qemu-kit <stamp> ] created <date>
+
+## show-devs
+/aliases
+/chosen
+/cpu@0
+/memory@m0,80000000
+/openprom
+/openprom/client-services
+/options
+/packages
+/packages/SUNW,asr
+/packages/SUNW,builtin-drivers
+/packages/deblocker
+/packages/disk-label
+/packages/dropins
+/packages/obp-tftp
+/packages/terminal-emulator
+/virtual-devices@100
+/virtual-devices@100/console@1
+/virtual-devices@100/disk@0
+/virtual-devices@100/nvram@2
+/virtual-devices@100/rtc@3
+/virtual-memory
+
+## /aliases
+md-type                  legion
+ttyb                     /virtual-devices/console@4
+ttya                     /virtual-devices/console@1
+nvram                    /virtual-devices/nvram@5
+vdisk                    /virtual-devices/disk@0
+disk                     /virtual-devices/disk@0
+name                     aliases
+
+## /chosen
+bootargs
+bootpath
+mmu                      fff74080
+memory                   fff74290
+stdout                   fff49b78
+stdin                    fff49d80
+stdout-#lines            ffffffff
+name                     chosen
+
+## /cpu@0
+clock-frequency          004c4b40
+compatible               SUNW,UltraSPARC-T1
+                         SUNW,sun4v-cpu
+                         sun4v
+device_type              cpu
+reg                      c0000000 00000000 00000000 00000000
+name                     cpu
+
+## /memory@m0,80000000
+reg                      00000000 80000000 00000000 80000000
+name                     memory
+
+## /openprom
+version                  OBP 4.x.build_122+qemu <date>
+model                    SUNW,4.x.build_122+qemu[ sun4v-qemu-kit <stamp> ]
+aligned-allocator
+relative-addressing
+name                     openprom
+
+## /openprom/client-services
+name                     client-services
+
+## /options
+ttya-rts-dtr-off         false
+ttya-ignore-cd           true
+keyboard-layout
+reboot-command
+security-mode            none
+security-password
+security-#badlogins      0
+verbosity                min
+pci-mem64?               false
+diag-switch?             false
+local-mac-address?       true
+fcode-debug?             true
+scsi-initiator-id        7
+oem-logo
+oem-logo?                false
+oem-banner
+oem-banner?              false
+ansi-terminal?           true
+screen-#columns          80
+screen-#rows             34
+ttya-mode                9600,8,n,1,-
+output-device            ttya
+input-device             ttya
+auto-boot-on-error?      false
+load-base                16384
+auto-boot?               false
+network-boot-arguments
+boot-command             boot
+boot-file
+boot-device              disk
+multipath-boot?          false
+boot-device-index        0
+use-nvramrc?             false
+nvramrc
+error-reset-recovery     boot
+name                     options
+
+## /packages
+name                     packages
+
+## /packages/SUNW,asr
+name                     SUNW,asr
+
+## /packages/SUNW,builtin-drivers
+name                     SUNW,builtin-drivers
+
+## /packages/deblocker
+disk-write-fix
+name                     deblocker
+
+## /packages/disk-label
+name                     disk-label
+
+## /packages/dropins
+source                   /flashprom:
+name                     dropins
+
+## /packages/obp-tftp
+name                     obp-tftp
+
+## /packages/terminal-emulator
+iso6429-1983-colors
+name                     terminal-emulator
+
+## /virtual-devices@100
+interrupt-map            00 00 00 00 00 00 00 01 f0 26 a6 bc 00 00 00 00 ...
+interrupt-map-mask       00 00 00 1f 00 ff ff ff 00 00 00 03
+#interrupt-cells         00000001
+reg                      c0000100 00000000 00000000 00000000
+#address-cells           00000001
+#size-cells              00000000
+device_type              virtual-devices
+compatible               SUNW,sun4v-virtual-devices
+                         SUNW,virtual-devices
+name                     virtual-devices
+
+## /virtual-devices@100/console@1
+ignore-cd
+reg                      00000001
+device_type              serial
+compatible               qcn
+                         SUNW,sun4v-console
+name                     console
+interrupts               00000001
+
+## /virtual-devices@100/disk@0
+device_type              block
+reg                      00000000
+name                     disk
+compatible               SUNW,legion-disk
+interrupts               00000001
+
+## /virtual-devices@100/nvram@2
+reg                      00000002
+name                     nvram
+interrupts               00000001
+
+## /virtual-devices@100/rtc@3
+compatible               sun4v-tod
+reg                      00000003
+name                     rtc
+interrupts               00000001
+
+## /virtual-memory
+translations             00 00 00 00 00 00 20 00 00 00 00 00 00 9f e0 00 ...
+existing                 00000000 00000000 00000800 00000000
+                         fffff800 00000000 00000800 00000000
+available                fffff800 00000000 000007fc 00000000
+                         00000001 00000000 000007ff 00000000
+                         00000000 ffff0000 00000000 0000e000
+                         00000000 00000000 00000000 f0000000
+                         00000000 fff00000 00000000 00048000
+                         00000000 f0a00000 00000000 0e540000
+page-size                00002000
+name                     virtual-memory

@@ -1,0 +1,43 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the internal hypervisor test gate for the GNU path: what can be checked about q.bin/reset.bin
+# without a Sun build, a Solaris host or QEMU -- only this repository and the GNU cross toolchain.
+#
+# Order:
+#   no-asm-warnings   the build is warning-free (GNU as / gcc stderr is hidden by build.sh)
+#   setx-rd-pc        every `setx <label>` + `rd %pc` relocation points at its own rd
+#   offsets-cross-check  offsets.h computed two independent ways agrees; equals Sun's reference
+#
+# One build (lib/build.sh, stderr visible) is shared by all the tests.
+#
+# Usage: run [test-name ...]      (default: every internal test, in order)
+# Env:   OUTDIR   build directory (default: a fresh temp dir)
+#        PLATFORM, VARIANT, HV_EXTRA_OPTS   as for build/hv_reset/gnu/build.sh; `make hv-verify` sets them
+set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export OUTDIR=${OUTDIR:-$(mktemp -d "${TMPDIR:-/tmp}/hv-test.XXXXXX")}
+mkdir -p "$OUTDIR"
+
+ORDER="no-asm-warnings setx-rd-pc offsets-cross-check"
+WANT="${*:-$ORDER}"
+
+t0=$(date +%s)
+for name in $WANT; do
+    script="$HERE/internal/$name.sh"
+    [ -x "$script" ] || { echo "run: no such internal test '$name' ($script)" >&2; exit 2; }
+    echo
+    echo "############################################################"
+    echo "# $name"
+    echo "############################################################"
+    s=$(date +%s)
+    if "$script"; then
+        echo "-- $name: $(( $(date +%s) - s ))s"
+    else
+        rc=$?
+        echo "-- $name: FAILED (exit $rc)" >&2
+        exit "$rc"
+    fi
+done
+echo
+echo "hv-verify: all passed in $(( $(date +%s) - t0 ))s (build in $OUTDIR)"

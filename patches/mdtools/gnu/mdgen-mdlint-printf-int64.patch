@@ -1,0 +1,89 @@
+mdgen/mdlint: print uint64_t with PRIx64/PRId64, not %llx/%lld.
+
+Sun built these ILP32, where uint64_t is unsigned long long and %llx is
+exact. On an LP64 host uint64_t is unsigned long and every one of the five
+sites warns under -Wformat. Same width, same varargs slot, so the output is
+identical on every host this project builds on -- this is about a clean
+-Wformat, so that the next real format bug is visible instead of the 45th
+line of noise. (Sun's own newer files, output_text.c and output_bin.c,
+already use <inttypes.h> for exactly this; mdmain.c, output_dot.c and
+mdlint.c were never converted.)
+
+All five sites are in the --text and --dot writers. output_bin.c, the only
+writer whose bytes QEMU loads, is untouched.
+
+Applied after mdgen-mdlint-host-endian.patch by build/mdtools/gnu/build.sh
+to a throwaway copy of src/hypervisor/src/support; src/ is never touched.
+Verified 2026-09-22: 1up-md.bin, 1up-hv.bin and both --text outputs
+byte-identical before and after (TARGET=pci).
+
+diff -ru a/mdgen/mdmain.c b/mdgen/mdmain.c
+--- a/mdgen/mdmain.c	2026-09-22 12:21:30.100906123 +0200
++++ b/mdgen/mdmain.c	2026-09-22 12:21:30.178906438 +0200
+@@ -49,6 +49,7 @@
+ #pragma ident	"@(#)mdmain.c	1.3	07/06/07 SMI"
+ 
+ #include <stdio.h>
++#include <inttypes.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <fcntl.h>
+@@ -396,7 +397,7 @@
+ 				    pep->u.strp);
+ 				break;
+ 			case PE_int:
+-				fprintf(fp, "\t%s = 0x%llx;\n", pep->namep,
++				fprintf(fp, "\t%s = 0x%" PRIx64 ";\n", pep->namep,
+ 				    pep->u.val);
+ 				break;
+ 			case PE_arc:
+diff -ru a/mdgen/output_dot.c b/mdgen/output_dot.c
+--- a/mdgen/output_dot.c	2026-09-22 12:21:30.101906127 +0200
++++ b/mdgen/output_dot.c	2026-09-22 12:21:30.178906438 +0200
+@@ -49,6 +49,7 @@
+ #pragma ident	"@(#)output_dot.c	1.2	07/06/07 SMI"
+ 
+ #include <stdio.h>
++#include <inttypes.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <sys/types.h>
+@@ -142,7 +143,7 @@
+ 					    sanity_name(pep->u.strp));
+ 					break;
+ 				case PE_int:
+-					fprintf(fp, "%s = 0x%llx\\n",
++					fprintf(fp, "%s = 0x%" PRIx64 "\\n",
+ 					    pep->namep, pep->u.val);
+ 					break;
+ 				case PE_arc:
+diff -ru a/mdlint/mdlint.c b/mdlint/mdlint.c
+--- a/mdlint/mdlint.c	2026-09-22 12:21:30.102906131 +0200
++++ b/mdlint/mdlint.c	2026-09-22 12:21:30.178906438 +0200
+@@ -221,7 +221,7 @@
+ 			stro = ntoh32(np->name);
+ 
+ 			fprintf(fp, "node %s node_0x%x {\t\t\t/* next "
+-			    "@ 0x%llx */\n",
++			    "@ 0x%" PRIx64 " */\n",
+ 			    mdp->namep + stro, idx, nextidx);
+ 			count ++;
+ 			break;
+@@ -234,7 +234,7 @@
+ 			nextidx = ntoh64(np->d.prop_idx);
+ 			stro = ntoh32(np->name);
+ 
+-			fprintf(fp, "\t%s -> node_0x%llx;\n",
++			fprintf(fp, "\t%s -> node_0x%" PRIx64 ";\n",
+ 			    mdp->namep + stro, nextidx);
+ 			break;
+ 
+@@ -242,7 +242,7 @@
+ 			val = ntoh64(np->d.prop_val);
+ 			stro = ntoh32(np->name);
+ 
+-			fprintf(fp, "\t%s = 0x%llx;\t\t/* %lld */\n",
++			fprintf(fp, "\t%s = 0x%" PRIx64 ";\t\t/* %" PRId64 " */\n",
+ 			    mdp->namep + stro, val, val);
+ 			break;
+ 

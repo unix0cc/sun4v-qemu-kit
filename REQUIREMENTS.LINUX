@@ -1,0 +1,62 @@
+Build requirements -- GNU/Linux
+===============================
+
+Debian and Ubuntu only: the rpm distributions have no sparc64 cross glibc. On
+such a host use container/Containerfile (container/README).
+
+Packages
+--------
+Debian/Ubuntu packages, and what they provide:
+
+    gcc-sparc64-linux-gnu                 sparc64-linux-gnu-gcc, cross compiler
+    binutils-sparc64-linux-gnu            cross as, ld, objcopy, size, readelf
+    libgcc-[ver]-dev-sparc64-cross        cross libgcc
+    libc6-dev-sparc64-cross               cross glibc, 64-bit, static
+                                          (forth64, makedi, makeprom)
+    libc6-dev-sparc-sparc64-cross         cross glibc, 32-bit, for OpenBoot
+                                          (static; forth32)
+    gcc-[ver]-multilib-sparc64-linux-gnu  cross gcc -m32 multilib, for OpenBoot
+    lib32gcc-[ver]-dev-sparc64-cross      cross libgcc, 32-bit, for OpenBoot
+
+    qemu-user-static                      qemu-sparc{64,32plus}-static
+                                          for OpenBoot (QEMU_SPARC64=,
+                                          QEMU_SPARC32= override)
+    qemu-system-sparc                     qemu-system-sparc64, for the tests
+                                          (QEMU= overrides)
+
+    gcc                                   host compiler (for mdgen/mdlint)
+    cpp                                   traditional cpp (-traditional-cpp)
+    binutils                              ar
+    make 4.3 or later (GNU)               grouped targets (`&:`) in build/obp/gnu/obp-gnu.mk
+    patch, flex, python3, perl
+    gawk, diffutils, coreutils            awk, cmp; od, sha256sum, dd
+
+[ver] is the major version of gcc: 13 on Ubuntu 24.04. Built and tested with
+gcc 13, 14, 15 and 16 (14 to 16 from source): build_matrix. Another gcc, or GCC
+15 and later (C23): see README.configure, "Choosing the compiler".
+
+Optional
+--------
+- ./configure checks that the tools above are present and usable before a build
+  starts, and says what is missing: README.configure.
+- git: without it the OpenBoot banner says "git unknown" instead of the commit
+  id. `make release` needs it.
+- Network: `make bootstrap-check` and `bootstrap-chain`
+  (forth_bootstrap/README) clone cforth on the first run.
+
+Versions this was built and tested with
+---------------------------------------
+    cross gcc, host gcc          13.3.0, 14.4.0, 15.3.0, 16.2.0 (build_matrix)
+    cross binutils               2.42
+    make                         4.3 (Ubuntu 24.04)
+    flex                         2.6.4
+    python3                      3.12.3
+    qemu-sparc64 / -sparc32plus  8.2.2 (a linux-user build of QEMU from
+                                 source gives byte-identical output)
+    qemu-system-sparc            8.2.2, tests only
+    glibc (32-bit, cross)        2.39
+
+Little here depends on a specific version. GNU make must be 4.3 or later (grouped targets; an older one
+stops with a message that says so). The other real constraint is that cpp
+must support -traditional-cpp: the MD sources use K&R token pasting
+(`cpu/**/x` in md/common.pdesc), which an ANSI preprocessor does not perform.

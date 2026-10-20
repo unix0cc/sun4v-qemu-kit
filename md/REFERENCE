@@ -1,0 +1,798 @@
+md/REFERENCE -- the two machine descriptions, and where their values come from
+==============================================================================
+
+This file describes the two Machine Descriptions (MD) of the firmware.
+They are the "hypervisor MD" (hv) and the "guest MD" (md).
+For every node and property it says:
+    what defines it,
+    who reads it,
+    where its value comes from.
+
+Layout
+    hv   md/common.hdesc            macros and constants only
+         md/legion/1up.hdesc        the legion machine, complete
+         md/pci/1up.hdesc           the pci machine, complete
+         -> 1up-hv.bin
+
+    md   md/common.pdesc            macros and constants only
+         md/legion/1up.pdesc        the legion machine, complete
+         md/pci/1up.pdesc           the pci machine, complete
+         -> 1up-md.bin
+
+A build uses one machine, legion or pci, with the common.* files.
+
+There are two parts:
+    Part 1   the hypervisor MD   md/common.hdesc and md/*/1up.hdesc
+    Part 2   the guest MD        md/common.pdesc and md/*/1up.pdesc
+
+The values of the hypervisor MD are also commented in the .hdesc files.
+The tables here are checked against the built MD files by
+tests/full/md/internal/refdoc.sh (it runs tests/full/md/lib/refdoc.py).
+Nothing in this file changes the MDs.
+
+
+Sources
+-------
+
+The two Sun archives have short names, given with their download below:
+"T1-archive" and "T2-archive".
+A file is cited as <archive>:<path inside the archive>.
+The sha256 sums of the archives are in
+tests/full/md/expected/sun-archives.sha256.
+
+"T1-archive" = OpenSPARCT1_Arch.1.5.tar.bz2
+    http://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2
+    There are two kinds of files we use.
+
+    1. MD source files:
+         legion/src/config/niagara/{common,1up,1g2p}.hdesc and *.pdesc
+         legion/common.hdesc
+         hypervisor/src/greatlakes/ontario/t1_fpga/configs/*
+       The hypervisor MD in these files has another layout than ours (one flat
+       guest node).
+       Only the property names and values are shared.
+
+    2. The machine configuration legion/src/config/niagara/1up.conf.
+       It has the address plan of the simulated machine.
+       QEMU's niagara machine has the same addresses (the last column):
+         1up.conf      address            QEMU niagara.c
+         ------------- ------------------ --------------------------------------
+         memory        0x80000000         NIAGARA_PARTITION_RAM_BASE
+         disk          0x1f40000000       NIAGARA_VDISK_BASE
+         nvram         0x1f11000000       NIAGARA_NVRAM_BASE
+         guest MD      0x1f12000000       NIAGARA_MD_ROM_BASE
+         hypervisor MD 0x1f12080000       NIAGARA_HV_ROM_BASE
+         boot ROM      0xfff0000000       NIAGARA_PROM_BASE (reset.bin)
+         q.bin         boot ROM + 0x10000 NIAGARA_PROM_BASE + NIAGARA_Q_OFFSET
+         openboot.bin  boot ROM + 0x80000 NIAGARA_PROM_BASE + NIAGARA_OBP_OFFSET
+
+"T2-archive" = OpenSPARCT2_Arch.1.2.tar.bz2
+    https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT2_Arch.1.2.tar.bz2
+    We use two things from it.
+
+    1. The hypervisor code: hypervisor/src/common/src and
+       hypervisor/src/greatlakes (BSD+).
+       In this repository it is src/hypervisor/src. The "read at" columns point
+       into it.
+       No specification describes the hypervisor MD.
+       So this code, which parses the MD, is the only first-hand source (see
+       md/README).
+
+    2. MD source files: t1_fpga/src/xilinx/configs/*_hv.desc and *_guest.desc.
+       We call them "configs/" below.
+       The constants are in
+       t1_fpga/src/xilinx/include/xilinx_t1_system_config.h.
+       No licence is named for these files. Their header says "Use is subject to
+       license terms".
+       Our .hdesc files have the layout of the *_hv.desc files.
+
+QEMU
+    hw/sparc64/niagara.c, the NIAGARA_* constants.
+    We cite them where a value is an address of the machine.
+
+Guest OS (called "OS" below)
+    OpenSolaris dev b134 (osol-dev-134-ai-sparc.iso, 291942400 bytes,
+    sha256 fe36ae8d3aea3797a10607c0e024c02fe91f99f43f64e5234280b7a0c4e8ab0a)
+    is the OS whose code we read, to see how OS, the hypervisor and OpenBoot
+    work together. We read it in illumos-gate, commit eb9dbf0cbc (2010-03-16),
+    the last one before the ISO:
+    git clone https://github.com/illumos/illumos-gate
+    Cited as OS/<path under usr/src/uts>.
+    The tests boot Solaris 10, whose kernel is closed: legion with the
+    OpenSPARC T1 image, pci with S10u11.
+
+Specifications
+    The guest MD is described by Hypervisor API 2.0b and FWARC 2005/115.
+    They are named at the start of part 2.
+
+
+Where the "read at" files are
+-----------------------------
+
+A file name in a "read at" column has no directory when the file is in
+hypervisor/src/common/src.
+For the other files:
+    config.h, guest.h, vdev_intr.h    hypervisor/src/greatlakes/common/include
+    vdev_simdisk.s                    hypervisor/src/greatlakes/common/src
+    main.s                            hypervisor/src/greatlakes/ontario/src and
+                                      huron/src
+
+
+Part 1. The hypervisor MD
+=========================
+
+The hypervisor MD is md/common.hdesc and md/*/1up.hdesc, built to 1up-hv.bin.
+The hypervisor reads it. OpenBoot and OS do not.
+No specification describes it.
+The first-hand source is the hypervisor code that parses it: src/hypervisor/src
+in this tree.
+
+md/common.hdesc
+---------------
+It is included by every md/*/1up.hdesc and has macros and constants only: no
+node and no property of its own.
+The 1up.hdesc files use five of them.
+The last column is hw/sparc64/niagara.c of QEMU, the machine these values must
+fit:
+    macro    value of value        QEMU niagara.c
+    -------- -------- ------------ ---------------------------------------
+    HVUART   hvuart   0xfff0c2c000 not in niagara.c;
+                                   devel/0003-niagara-hvuart-console.patch of
+                                   github.com/unix0cc/qemu-experimental-patches
+                                   maps the UART there
+    HVTOD    tod      0xfff0c1fff8 NIAGARA_RTC_BASE
+    PUART(n) uartbase 0x1f10000000 NIAGARA_UART_BASE
+                                   (used once, as PUART(0))
+    ROMBASE  rombase  0xfff0080000 NIAGARA_PROM_BASE
+                                   + NIAGARA_OBP_OFFSET
+    ROMSIZE  romsize  512k         no counterpart: the PROM region
+                                   is 4 MiB, openboot.bin is about 348 KB
+
+Legend
+------
+    column     value     meaning
+    ---------- --------- -----------------------------------------
+    required   yes       parser reports an error if missing
+               default 0 the hypervisor takes 0
+               unread    no code in src/hypervisor reads it
+               pci only  node is in the pci MD only
+    read at    file:line in src/hypervisor/src
+                         (no directory: hypervisor/src/common/src)
+    T1-archive file      file of the archive that has it
+    T2-archive -         the archive does not have it
+"Required" is read in the code cited.
+It was not tried by removing each property and booting.
+
+Nodes of the hypervisor MD
+--------------------------
+
+Per node: whether the hypervisor needs it, and where it reads it.
+Every node below is in T2-archive: configs/*_hv.desc.
+Where the node is also in T1-archive, the last column names the file, legion/ in
+T1-archive,
+for historical reference: how the node was described there.
+
+    node            required read at (hypervisor code)          in T1-archive
+    --------------- -------- ---------------------------------- ---------------
+    root            yes      res_pcie.c:123, reconf.c:124-171   -
+    platform        unread   not in the name table (mdsup.c)    -
+    guests          yes      res_guest.c:161                    -
+    cpus            yes      res_vcpu.c:134                     -
+    memory          yes      res_memory.c:219                   -
+    maus            yes      res_mau.c:129                      -
+    cwqs            yes      greatlakes/huron/src/res_cwq.c:143 -
+    devices         yes      res_pcie.c:131, res_network.c:128  -
+    consoles        yes      res_console.c:135                  -
+    guest           yes      res_guest.c:170                    common.hdesc
+                                                                GUEST() macro
+                                                                (one flat node)
+    virtual_devices yes      res_guest.c:414                    -
+    channel_devices yes      res_guest.c:425; res_ldc.c:533     -
+                             asserts its cfghandle
+    cpu             yes      res_vcpu.c:143                     common.hdesc
+                                                                CPU() macro
+    mblock          yes      res_memory.c:228                   -
+    console         yes      res_console.c:144                  -
+    pcie_bus        pci only res_pcie.c:144                     -
+
+Structure of the hypervisor MD
+------------------------------
+
+An MD is a Directed Acyclic Graph (DAG): the nodes are joined by arcs.
+An arc goes from a node to another node.
+A "fwd" arc goes down the graph, a "back" arc goes up.
+Every "fwd" arc has a "back" arc in the node it points to.
+The format is explained in
+https://unix0.cc/2026/07/15/sun4v-machine-description-part-1/
+
+This table shows, for each node type, its arcs and its properties, as the blobs
+have them.
+There is one node of each type, so an arc names a type.
+(pci) means: only in the pci MD.
+The node names are those of the table above.
+tests/full/md/internal/refdoc.sh checks the table against md/*/1up-hv.bin of
+legion and pci.
+
+node            fwd             back     properties
+--------------- --------------- -------- ---------------
+root            platform        -        content-version
+                guests                   stick-frequency
+                cpus                     hvuart
+                memory                   tod
+                maus
+                cwqs
+                devices
+                consoles
+platform        -               root     stick-frequency
+guests          guest           root     -
+cpus            cpu             root     -
+memory          mblock          root     -
+maus            -               root     -
+cwqs            -               root     -
+devices         pcie_bus(pci)   root     -
+consoles        console         root     -
+guest           virtual_devices guests   resource_id
+                channel_devices          mdpa
+                cpu                      rombase
+                mblock                   romsize
+                console                  diskpa
+                pcie_bus(pci)
+virtual_devices -               guest    cfghandle
+channel_devices -               guest    cfghandle
+cpu             -               cpus     pid
+                                guest    vid
+                                         resource_id
+mblock          -               memory   membase
+                                guest    memsize
+                                         realbase
+                                         resource_id
+console         -               consoles ino
+                                guest    resource_id
+                                         uartbase
+pcie_bus(pci)   -               devices  resource_id
+                                guest    cfghandle
+
+Properties of the hypervisor MD
+-------------------------------
+Per property:
+    value        in legion (pci differs only where said)
+    required     whether the hypervisor needs it
+    read at      where the hypervisor reads it
+    T1-archive   whether the archive has it
+    T2-archive   (configs/) whether the archive has it
+    note
+
+root.content-version
+    value                  0x100000000
+    required               yes
+    read at                reconf.c:124 (the major version must equal
+                           HV_MDCONT_VER_MAJOR, else the hypervisor aborts)
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   major << 32 | minor, 1.0 (config.h:98-99). The guest
+                           MD's property of this name is the string "1" (FWARC
+                           2005/115).
+
+root.stick-frequency
+    value                  100000000
+    required               yes
+    read at                reconf.c:171
+    T1-archive             -
+    T2-archive             configs/*_hv.desc (another value: 1000000000)
+    note                   The tick rate QEMU provides. Ours: configs/*_hv.desc
+                           use the FPGA's, 1000000000 (T1_FPGA_STICK_FREQ).
+
+root.hvuart
+    value                  0xfff0c2c000
+    required               yes
+    read at                reconf.c:150
+    T1-archive             legion/common.hdesc (HVUART)
+    T2-archive             configs/*_hv.desc (same value: T1_FPGA_UART_BASE)
+    note                   An address.
+
+root.tod
+    value                  0xfff0c1fff8
+    required               yes
+    read at                reconf.c:162
+    T1-archive             legion/common.hdesc (HVTOD)
+    T2-archive             configs/*_hv.desc (another value: 0)
+    note                   An address; QEMU NIAGARA_RTC_BASE is the same.
+
+platform.stick-frequency
+    value                  100000000
+    required               unread
+    read at                -
+    T1-archive             -
+    T2-archive             configs/*_hv.desc (another value: 1000000000)
+    note                   The hypervisor reads the root's.
+
+guest.resource_id
+    value                  0
+    required               yes
+    read at                res_guest.c:198, 251
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   An index below NGUESTS (res_guest.c:198-206).
+
+guest.mdpa
+    value                  0x1f12000000
+    required               yes
+    read at                res_guest.c:255, reconf.c:1272
+    T1-archive             1up.conf, 1g2p.hdesc (pdpa; the same address)
+    T2-archive             configs/*_hv.desc (another value: 0xfff00f0000)
+    note                   The guest MD's load address; QEMU
+                           NIAGARA_MD_ROM_BASE.
+
+guest.rombase
+    value                  0xfff0080000
+    required               yes
+    read at                res_guest.c:252, reconf.c:1206
+    T1-archive             legion/common.hdesc (ROMBASE)
+    T2-archive             configs/*_hv.desc (same value: ROMBASE of
+                           xilinx_t1_system_config.h)
+    note                   Where the hypervisor copies the OpenBoot image from
+                           (greatlakes/*/main.s, "Copy guest's firmware image");
+                           QEMU puts openboot.bin there.
+
+guest.romsize
+    value                  0x80000 (512k)
+    required               yes
+    read at                res_guest.c:253, reconf.c:1207
+    T1-archive             legion/common.hdesc (ROMSIZE)
+    T2-archive             configs/*_hv.desc (another value: 0x70000)
+    note                   Bytes copied; must not exceed the guest's base mblock
+                           (res_guest.c, HVctl_e_guest_base_mblock_too_small).
+
+guest.diskpa
+    value                  0x1f40000000
+    required               only with CONFIG_DISK
+    read at                res_guest.c:265, reconf.c:1278
+    T1-archive             1up.conf, 1g2p.hdesc (the same address)
+    T2-archive             configs/*_hv.desc (another value: 0xfff1000000)
+    note                   The simulated disk's address; vdev_simdisk.s reads
+                           the disk there; QEMU NIAGARA_VDISK_BASE.
+
+guest.uartbase
+    value                  not written
+    required               only with CONFIG_CN_UART
+    read at                res_guest.c:258
+    T1-archive             legion/common.hdesc, PUART(n)
+    T2-archive             -
+    note                   The console node carries it instead.
+
+guest.tod-offset
+    value                  not written
+    required               default 0
+    read at                res_guest.c:403
+    T1-archive             t1_fpga common.hdesc (tod-offset = 0)
+    T2-archive             configs/*_hv.desc
+
+guest.reset-reason
+    value                  not written
+    required               default 0
+    read at                res_guest.c:281
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   RESET_REASON_POR = 0 (config.h:434).
+
+guest.diagpriv
+    value                  not written
+    required               default 0
+    read at                res_guest.c:369
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   A non-zero value gives the guest hyperprivileged
+                           code.
+
+guest.perfctraccess
+    value                  not written
+    required               default 0
+    read at                res_guest.c:360
+    T1-archive             legion/common.hdesc (perfctraccess = 1)
+    T2-archive             configs/*_hv.desc
+    note                   Must stay 0 here: the counters read T1 registers QEMU
+                           does not map (comment in md/legion/1up.hdesc).
+
+guest.perfctrhtaccess
+    value                  not written
+    required               default 0
+    read at                res_guest.c:391
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+
+guest.rngctlaccessible
+    value                  not written
+    required               default 0
+    read at                res_guest.c:382
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+
+virtual_devices.cfghandle
+    value                  0x100
+    required               yes
+    read at                res_guest.c:415
+    T1-archive             common.pdesc (VDEV_HANDLE; guest side)
+    T2-archive             configs/*_hv.desc
+    note                   The guest MD's VDEV_HANDLE must agree. A multiple of
+                           64 below 0x800: the device id is the handle >> 6
+                           (vdev_intr.h).
+
+channel_devices.cfghandle
+    value                  0x300
+    required               yes
+    read at                res_guest.c:426
+    T1-archive             -
+    T2-archive             0x200 (configs/1c1t_hv.desc)
+    note                   Ours. A multiple of 64; the hypervisor reserves
+                           MAX_LDC_INOS (512) above it.
+
+cpu.resource_id
+    value                  0
+    required               yes
+    read at                res_vcpu.c:169
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   An index below NVCPUS (res_vcpu.c:169-180).
+
+cpu.pid
+    value                  0
+    required               yes
+    read at                res_vcpu.c:186
+    T1-archive             legion/common.hdesc, CPU(n,...) pid = n
+    T2-archive             configs/*_hv.desc
+    note                   The physical strand.
+
+cpu.vid
+    value                  0
+    required               yes
+    read at                res_vcpu.c:198
+    T1-archive             legion/common.hdesc, CPU(n,...)
+    T2-archive             configs/*_hv.desc
+    note                   The virtual cpu id in the guest.
+
+mblock.resource_id
+    value                  0
+    required               yes
+    read at                res_memory.c:241
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+
+mblock.membase
+    value                  0x80000000
+    required               yes
+    read at                res_memory.c:258
+    T1-archive             GUEST(...) of 1up.hdesc (0x80000000)
+    T2-archive             configs/*_hv.desc (another value: 0x1000000)
+    note                   QEMU NIAGARA_PARTITION_RAM_BASE.
+
+mblock.realbase
+    value                  0x80000000
+    required               yes
+    read at                res_memory.c:276
+    T1-archive             GUEST(...) of 1up.hdesc (0x80000000)
+    T2-archive             configs/*_hv.desc (another value: 0x1000000)
+
+mblock.memsize
+    value                  MD_MEM
+    required               yes
+    read at                res_memory.c:263
+    T1-archive             256M in 1up.hdesc
+    T2-archive             configs/*_hv.desc (another value: 0x9c00000)
+    note                   Ours. Must equal the guest MD's mblock size.
+
+console.resource_id
+    value                  0
+    required               yes
+    read at                res_console.c:171
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+
+console.ino
+    value                  0x11
+    required               yes
+    read at                res_console.c:277 (below 64)
+    T1-archive             common.pdesc (guest side)
+    T2-archive             configs/*_hv.desc
+    note                   The guest MD's console ino must agree.
+
+console.uartbase
+    value                  0x1f10000000
+    required               only with CONFIG_CN_UART
+    read at                res_console.c:226
+    T1-archive             legion/common.hdesc, PUART(0)
+    T2-archive             configs/*_hv.desc (another value: 0xfff0c2c000)
+    note                   QEMU NIAGARA_UART_BASE.
+
+pcie_bus.resource_id
+    value                  0
+    required               yes (pci only)
+    read at                res_pcie.c:177
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+
+pcie_bus.cfghandle
+    value                  0
+    required               yes (pci only)
+    read at                res_pcie.c:183
+    T1-archive             -
+    T2-archive             configs/*_hv.desc
+    note                   The PCIe devhandle the guest names in every VPCI
+                           hypercall; must equal the guest MD's cfg-handle. That
+                           cfg-handle (iodevice pci_bus, md/pci/1up.pdesc) is
+                           also the 0 in the device path /pci@0: OBP names the
+                           node /pci@<cfg-handle>.
+
+
+Part 2. The guest MD
+====================
+
+The guest MD is md/common.pdesc and md/*/1up.pdesc.
+OpenBoot and OS read it. The hypervisor does not.
+Unlike the hypervisor MD, it has published specifications:
+
+    Hypervisor API 2.0b
+    https://sun4v.github.io/downloads/Hypervisor-api-2.0b.pdf
+                          chapter 8 (the machine description nodes)
+    FWARC 2005/115        "sun4v machine description"
+                          https://sun4v.github.io/ARChive/FWARC/2005/115/
+                          md-bindings.pdf, section 5
+
+Our pdesc files are Sun's files, headers kept, with our changes.
+Most of their content lines are identical to the T1-archive files, far fewer to
+the T2-archive files.
+
+Legend
+------
+The table has one row per node and one per property of a node.
+In this file a row is called a position.
+
+    column              value      meaning
+    ------------------- ---------- -------------------------------------
+    Hypervisor API 2.0b 8.x.y      section that lists the position
+    FWARC 2005/115      R, O       required, optional, as in the spec
+                        -          not in that table (see below)
+    in T1, in T2        y          name in the pdesc files, same node
+                        o          name in another node
+                        -          name nowhere
+    read y/n            y          OpenBoot or OS reads it
+                        n          nothing found (see "The read column" below)
+    where               OBP/#N     reader; #N is the note below
+                                   OBP  OpenBoot, src/obp/obp/arch/sun4v
+                                   OS   OS source, usr/src/uts
+                                   API  the Hypervisor API
+                                   none nothing found that reads it
+
+    T1 files: T1-archive legion/src/config/niagara/*.pdesc
+              T1-archive hypervisor/src/greatlakes/ontario/t1_fpga/configs/
+              *.pdesc
+    T2 files: T2-archive t1_fpga/src/xilinx/configs/*_guest.desc (no licence
+    named)
+    T1 and T2 test the name, not the value or the line.
+    OpenBoot reads nodes that no specification table here lists:
+        the nodes iodevice and interrupt-map-entry (FWARC 2007/386 and the cases
+        around it; for pci see md/pci/README and
+        "The iodevice values" at the end)
+        the nodes openboot, devalias and phys_io (OpenBoot's own)
+    A note names the file of the reader, without line numbers.
+
+The read column
+    Each position was looked up in the source code, and each hit read in its
+    context, to see which MD node it asks. The readers found are in the "where"
+    column and the notes. A reader that builds the name at run time would be
+    missed.
+
+Nodes and properties of the guest MD
+------------------------------------
+
+node                property           Hypervisor FWARC    in in read where
+                                       API 2.0b   2005/115 T1 T2 y/n
+------------------- ------------------ ---------- -------- -- -- ---- ----------
+cpu                 (node)             8.19.3     5.5.3    y  y  y    OBP,OS/#1
+cpu                 id                 8.19.3.1 R 5.5.3 R  y  y  y    OBP,OS/#2
+cpu                 clock-frequency    8.19.3.1 R 5.5.3 R  y  y  y    OBP,OS/#3
+cpu                 isalist            -          -        y  y  y    OS/#4
+cpu                 compatible         -          -        y  y  y    OS/#4
+cpu                 mmu-max-#tsbs      8.19.3.1 O 5.5.3 O  -  y  y    OS/#4
+cpu                 mmu-page-size-list 8.19.3.1 O 5.5.3 O  -  y  y    OS/#5
+cpu                 mmu-#va-bits       8.19.3.1 O 5.5.3 O  -  y  y    OS/#6
+mblock              (node)             8.19.5     5.5.5    y  y  y    OBP,OS/#7
+mblock              base               8.19.5.2 R 5.5.5 R  y  y  y    OBP,OS/#7
+mblock              size               8.19.5.2 R 5.5.5 R  y  y  y    OBP,OS/#7
+memory              (node)             8.19.4     5.5.4    -  y  y    OS/#4
+cpus                (node)             8.19.2     5.5.2    -  y  y    OS/#4
+cache               (node)             8.20.1     5.6.1    -  y  y    OS/#4
+tlb                 (node)             8.20.3     5.6.3    -  y  y    OS/#4
+virtual-device      (node)             8.23.4     -        y  y  y    OBP,OS/#8
+virtual-device      name               8.23.4.2 R -        y  y  y    OBP,OS/#9
+virtual-device      compatible         8.23.4.2 R -        y  y  y    OBP,OS/#9
+virtual-device      ino                -          -        y  y  y    OBP/#10
+virtual-device      cfg-handle         8.23.4.2 R -        y  y  y    OBP,OS/#8
+openboot            (node)             -          -        -  y  y    OBP/#11
+variables           (node)             8.21       -        -  y  y    OBP/#12
+variables           fcode-debug?       -          -        -  y  y    OBP/#12
+variables           boot-device        -          -        y  y  y    OBP/#12
+variables           input-device       -          -        o  -  y    OBP/#12
+variables           output-device      -          -        o  -  y    OBP/#12
+variables           auto-boot?         -          -        -  y  y    OBP/#12
+devalias            (node)             -          -        y  y  y    OBP/#13
+devalias            disk               -          -        y  y  y    OBP/#13
+devalias            vdisk              -          -        y  y  y    OBP/#13
+devalias            nvram              -          -        y  y  y    OBP/#13
+devalias            ttya               -          -        y  y  y    OBP/#13
+devalias            ttyb               -          -        y  y  y    OBP/#13
+devalias            md-type            -          -        -  -  y    OBP/#13
+root                (node)             8.19.1     5.5.1    y  y  y    OBP/#14
+root                content-version    8.19.1.2 R 5.5.1 R  -  y  n    none/#29
+root                reset-reason       -          -        y  y  y    OBP/#16
+platform            (node)             8.19.6     5.5.6    y  y  y    OBP,OS/#17
+platform            banner-name        8.19.6.2 R 5.5.6 R  y  y  y    OBP/#18
+platform            name               8.19.6.2 R 5.5.6 R  y  y  y    OBP/#18
+platform            mac-address        8.19.6.2 O 5.5.6 O  y  y  y    OBP/#19
+platform            hostid             8.19.6.2 O 5.5.6 O  y  y  y    OBP/#19
+platform            serial#            8.19.6.2 O 5.5.6 O  y  y  n    none/#30
+platform            stick-frequency    8.19.6.2 R 5.5.6 R  y  y  y    OBP,OS/#20
+platform            clock-frequency    -          -        y  o  y    OBP/#18
+platform            max-cpus           8.19.6.2 O -        -  y  y    OS/#4
+virtual-devices     (node)             8.23.2     -        y  y  y    OBP/#21
+virtual-devices     name               8.23.2.2 R -        y  y  n    none/#31
+virtual-devices     device-type        8.23.2.2 R -        -  y  n    none/#31
+virtual-devices     compatible         8.23.2.2 R -        y  y  n    none/#31
+virtual-devices     cfg-handle         8.23.2.2 R -        y  y  y    OBP/#21
+phys_io             (node)             -          -        -  y  y    OBP/#23
+iodevice            (node)             -          -        -  y  y    OBP/#24
+iodevice            disabled           -          -        -  y  y    OBP/#24
+iodevice            device-type        -          -        -  y  y    OBP/#25
+iodevice            compatible         -          -        y  y  y    OBP/#25
+iodevice            cfg-handle         -          -        y  y  y    OBP/#26
+iodevice            address-ranges     -          -        -  y  y    OBP/#25
+iodevice            virtual-dma        -          -        -  y  y    OBP,OS/#32
+iodevice            probe-list         -          -        -  y  y    OBP/#22
+iodevice            msi-address-ranges -          -        -  y  y    OBP,OS/#27
+iodevice            msi-data-mask      -          -        -  y  y    OBP,OS/#15
+iodevice            msi-ranges         -          -        -  y  y    OBP,OS/#27
+iodevice            msi-eq-size        -          -        -  y  y    OBP,OS/#27
+iodevice            msix-data-width    -          -        -  y  y    OBP,OS/#27
+iodevice            msi-eq-to-devino   -          -        -  y  y    OBP,OS/#27
+iodevice            interrupts         -          -        -  y  y    OBP,OS/#33
+iodevice            interrupt-map-mask -          -        -  y  y    OBP/#28
+iodevice            bus-ranges         -          -        -  y  y    OBP,OS/#32
+iodevice            #msi               -          -        -  y  y    OBP,OS/#27
+iodevice            #msi-eqs           -          -        -  y  y    OBP,OS/#27
+iodevice            #interrupt-cells   -          -        -  y  y    OBP,OS/#33
+interrupt-map-entry (node)             -          -        -  y  y    OBP/#28
+interrupt-map-entry child-unit-address -          -        -  y  y    OBP/#28
+interrupt-map-entry child-interrupt    -          -        -  y  y    OBP/#28
+interrupt-map-entry parent-interrupt   -          -        -  y  y    OBP/#28
+interrupt-map-entry parent-device-path -          -        -  y  y    OBP/#28
+devalias            net                -          -        y  -  y    OBP/#13
+devalias            disk0              -          -        -  -  y    OBP/#13
+devalias            cdrom              -          -        -  -  y    OBP/#13
+
+The result is 75 of 80 positions read; the other 5 (marked n above) are not
+read by anything found. A position that is not read is kept because Sun's MDs
+have it.
+
+Note 1. OBP/cpustruct.fth, OBP/cpu.fth, OBP/mdload.fth,
+    OS/sun4v/os/fillsysinfo.c, OS/sun4v/os/mach_mp_startup.c
+
+Note 2. OBP/cpustruct.fth, OBP/cpu.fth, OS/sun4v/os/fillsysinfo.c,
+    OS/sun4v/os/mach_mp_startup.c
+
+Note 3. OBP/cpu.fth, OS/sun4v/io/dr_cpu.c
+
+Note 4. OS/sun4v/os/fillsysinfo.c
+    cpu isalist and compatible: read in fill_cpu and in init_md_broken. Both
+    panic if compatible is absent.
+
+Note 5. OS/sun4v/os/fillsysinfo.c, OS/sun4v/os/mpo.c
+
+Note 6. cpu mmu-#va-bits
+    By the specification: both values are in it. If the property is absent, 64
+    is assumed.
+    Fewer bits than real are legal.
+    We write 0x40, Sun's *_guest.desc write 0x30.
+    By the OS: get_va_bits() in OS/sun4v/os/fillsysinfo.c accepts 1 to 64.
+    It sets va_bits to 48 when broken_md_flag is set (cpu compatible
+    SUNW,UltraSPARC-T1, no domaining-enabled).
+    Solaris 10 gets va_bits 48 with 0x40 and with 0x30 (measured on the pci
+    configuration).
+
+Note 7. OBP/memprobe.fth, OS/sun4v/os/fillsysinfo.c, OS/sun4v/io/dr_mem.c
+
+Note 8. OBP/vcommon/probe.fth, OS/sun4v/io/cnex.c, OS/sun4v/io/dr_io.c
+
+Note 9. OBP/vcommon/probe.fth, OS/sun4v/io/dr_io.c
+
+Note 10. OBP/vcommon/probe.fth
+
+Note 11. OBP/ldom-variables.fth, OBP/domain-services.fth
+    openboot: OpenBoot looks the node up. Our node has none of the properties it
+    asks for.
+
+Note 12. OBP/ldom-variables.fth
+    variables: every string property of the node updates the NVRAM variable of
+    that name.
+
+Note 13. OBP/devalias.fth
+    devalias: every string property of the node becomes a devalias.
+
+Note 14. OBP/mdlib.fth
+
+Note 15. msi-data-mask: OBP/vpci/msi-props.fth, OS/sun4/io/px/px_msi.c
+    px stores the value (msi_data_mask); nothing else in OS uses it.
+
+Note 16. OBP/mdload.fth
+
+Note 17. OBP/machine-init.fth, OBP/idprom.fth, OS/sun4v/os/mach_cpu_states.c,
+    OS/sun4v/os/fillsysinfo.c
+
+Note 18. OBP/machine-init.fth
+
+Note 19. OBP/idprom.fth
+
+Note 20. OBP/machine-init.fth, OS/sun4v/os/mach_cpu_states.c
+
+Note 21. OBP/vcommon/probe.fth, OBP/vnexus/vnexus.tok
+    virtual-devices cfg-handle: vnexus.tok builds the nexus "reg" from it.
+
+Note 22. OBP/niagara/probeall.fth
+    virtual-devices probe-list: read for the pciex iodevice nodes only.
+
+Note 23. OBP/md-iodevice-props.fth, OBP/niagara/probeall.fth
+
+Note 24. OBP/root-prober.fth
+
+Note 25. OBP/vpci/hv-iface.fth
+
+Note 26. OBP/root-prober.fth, OBP/niagara/probeall.fth
+
+Note 27. OBP/vpci/msi-props.fth, OS/sun4/io/px/px_msi.c,
+    OS/sun4/io/px/px_msiq.c
+
+Note 28. OBP/md-iodevice-props.fth
+
+Note 29. root content-version: the Hypervisor API 2.0b and 3.0 draft7 (8.10,
+    8.19.1.2) define content version "1"; the guest MDs of T2-archive write
+    "1.0", as we do. Nothing reads it in OpenBoot or in OS source. Without it
+    legion and pci boot to the login prompt.
+
+Note 30. platform serial#: optional in both specifications. The banner's
+    Serial # is hostid & 0xffffff, not this. No reader found.
+
+Note 31. virtual-devices name, device-type, compatible: required by the
+    Hypervisor API (8.23.2.2). OpenBoot builds the nexus node from constants
+    (OBP/vnexus.tok). No reader found.
+
+Note 32. OBP/vpci/hv-iface.fth, OS/sun4/io/px/px_mmu.c (virtual-dma),
+    OS/sun4/io/px/px_util.c (bus-ranges)
+
+Note 33. OBP/md-iodevice-props.fth, OS/sun4/io/px/px_util.c
+
+The iodevice values
+    Where the values of the pci iodevice node (md/pci) come
+    from; the readers are in the notes above.
+    The hypervisor (src/hypervisor/src/greatlakes: ontario/include/fire.h,
+    ontario/include/fire/fire.h, ontario/src/vpci_fire.s, huron/include/piu.h,
+    huron/include/piu/piu.h):
+        address-ranges       three bases and sizes (IO, MEM32, MEM64); the last
+                             64 KB of MEM32 and MEM64 are the MSI windows, so
+                             those two are shorter by that
+        virtual-dma          the 2 GB DVMA window
+        msi-address-ranges   MSI32 0x7fff0000 and MSI64 0x3ffff0000, 64 KB each
+        #msi, msi-ranges     FIRE_MAX_MSIS, 256
+        #msi-eqs             FIRE_NEQS, 36
+        msi-eq-to-devino     the 36 queues from devino 0x18 (FIRE_EQ2INO)
+        msi-eq-size          FIRE_NEQRECORDS, 128
+        interrupts           0x3f, 0x3e: the error mondos 62 and 63
+        cfg-handle           pcie_bus.cfghandle of md/pci/1up.hdesc
+    FWARC 2007/386 and the code that reads them (OBP, px): device-type,
+    compatible, #interrupt-cells, msix-data-width (px enables MSI-X for 32),
+    disabled (0: OBP probes the node).
+    The interrupt-map-entry nodes: parent-interrupt 0x14..0x16 are the INOs of
+    INTA..INTD in the table of interrupt numbers of the OpenSPARC T2 SoC
+    Microarchitecture Specification (volume 2: INO 20-23 INTx, 24-59 event
+    queues, 62 and 63 internal); child-unit-address and child-interrupt follow
+    the PCI binding and FWARC 2007/386; parent-device-path is /pci@ plus the
+    cfg-handle.
+    Ours (md/pci/README): probe-list, interrupt-map-mask, bus-ranges.
+    No code needs msi-data-mask: note 15.

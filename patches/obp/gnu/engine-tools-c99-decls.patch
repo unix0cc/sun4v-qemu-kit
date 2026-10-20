@@ -1,0 +1,138 @@
+Source patch for the GNU build layer only -- the Forth engine (os/unix/
+wrapper.c, fsys.c) and the host tools (tools/didepend.c, comp.c, makeprom.c).
+
+Every hunk is a declaration Sun's compiler accepted silently and GCC 14
+rejects by default (-Werror=implicit-function-declaration, -Werror=implicit-int,
+-Werror=return-mismatch are on since GCC 14; GCC 13 warns). Without this the
+gnu path stops building on the next Ubuntu/Debian release. Twelve sites:
+
+  implicit function declarations -- getnum, xref_generate (wrapper.c),
+    xref_add_string (fsys.c). Each now has a prototype copied from its
+    definition. xref_add_string is a Sun bug on its own: libxref's header
+    declares xref_xref_add_string, a function that does not exist, and never
+    declares the one fsys.c calls. All three return int or void, so the
+    implicit `int` guessed nothing wrong on LP64 -- no codegen change.
+
+  sigset (wrapper.c) -- the SYS5 branch #defines signal to sigset. glibc has
+    sigset(3) but declares it only under _XOPEN_SOURCE>=500, and deprecated,
+    so the call was implicit. That one WAS wrong on LP64: s_signal() -- in the
+    function table the dictionary calls through (wrapper.c:189) -- returns
+    the previous handler as a long, and an implicit int truncated the pointer
+    to 32 bits. Nothing in the dictionary reads that value back, which is
+    why it never showed. The #define is now skipped on Linux, where signal(2)
+    already has the semantics sigset(3) was chosen for on SVR4 (handler
+    stays installed, signal blocked while it runs).
+
+  implicit int -- `static lmode` (wrapper.c, fsys.c), `static oldcode`,
+    `static offset` (comp.c), executable() (wrapper.c), main() (didepend.c).
+    Spelled out; no change in meaning.
+
+  return with no value in a function returning int -- makeprom.c do_dropin(),
+    on the nested-OBME early exit. Reachable only with -r (recurselevel > 0),
+    which this build never passes; the caller used whatever was in the return
+    register. Now returns what the function's contract says: true if the
+    buffer was rewritten and should be copied back, including by the nested
+    call.
+
+Applied after engine-getmem-mprotect-exec.patch and makeprom-ptr-roundup.patch
+by build/obp/gnu/engine/Makefile to a staged copy; src/obp is never touched.
+Paths follow the other two: os/unix/ from src/obp/obp, tools/ from src/obp.
+
+diff -ru a/os/unix/fsys.c b/os/unix/fsys.c
+--- a/os/unix/fsys.c	2026-09-22 12:18:42.165228673 +0200
++++ b/os/unix/fsys.c	2026-09-22 12:18:42.243228988 +0200
+@@ -85,6 +85,7 @@
+ 
+ extern char *substr();
+ extern void s_bye(long code);
++extern void xref_add_string(char *string, int len, int line);
+ 
+ extern int	errno;		/* Wherever the error code goes */
+ 
+@@ -97,7 +98,7 @@
+ #define	M_KEY  1
+ #define	M_LINE 2
+ #define	M_KEYQ 3
+-static lmode = M_ORIG;
++static int lmode = M_ORIG;
+ 
+ static fstackp
+ pop_fstring(fstackp stack, char **buf, int *len)
+diff -ru a/os/unix/wrapper.c b/os/unix/wrapper.c
+--- a/os/unix/wrapper.c	2026-09-22 12:18:42.167228681 +0200
++++ b/os/unix/wrapper.c	2026-09-22 12:18:42.242228984 +0200
+@@ -117,7 +117,7 @@
+ #include "xref.h"
+ #include "defines.h"
+ 
+-#ifdef SYS5
++#if defined(SYS5) && !defined(__linux__)
+ #define	signal sigset
+ #endif
+ 
+@@ -154,6 +154,8 @@
+ extern long	emacs();
+ extern long	pr_error();
+ extern long	s_signal();
++extern int	getnum(char *);
++extern void	xref_generate(int);
+ extern long	s_system();
+ extern long	s_chdir();
+ extern long	s_getwd();
+@@ -799,7 +801,7 @@
+ #define	M_KEY  1
+ #define	M_LINE 2
+ #define	M_KEYQ 3
+-static lmode = M_ORIG;
++static int lmode = M_ORIG;
+ 
+ void
+ initline(void)
+@@ -1258,6 +1260,7 @@
+ 	return (-1);
+ }
+ 
++int
+ executable(char *filename)	/* True if file is executable */
+ {
+ 	struct stat stbuf;
+diff -ru a/tools/comp.c b/tools/comp.c
+--- a/tools/comp.c	2026-09-22 12:18:42.166228677 +0200
++++ b/tools/comp.c	2026-09-22 12:18:42.243228988 +0200
+@@ -269,8 +269,8 @@
+  *	Chars are 8 bits long.
+  */
+ 
+-static oldcode = 0;
+-static offset = 0;
++static int oldcode = 0;
++static int offset = 0;
+ 
+ static void initout()
+ {
+diff -ru a/tools/didepend.c b/tools/didepend.c
+--- a/tools/didepend.c	2026-09-22 12:18:42.166228677 +0200
++++ b/tools/didepend.c	2026-09-22 12:18:42.243228988 +0200
+@@ -761,6 +761,7 @@
+ 	return (CAST(get_execute_token));
+ }
+ 
++int
+ main(int argc, char **argv)
+ {
+ 	extern char *optarg;
+diff -ru a/tools/makeprom.c b/tools/makeprom.c
+--- a/tools/makeprom.c	2026-09-22 12:18:42.169228689 +0200
++++ b/tools/makeprom.c	2026-09-22 12:18:42.243228988 +0200
+@@ -190,8 +190,9 @@
+ 			/*
+ 			 * A level 2 dropin..
+ 			 */
+-			do_dropin(level+1, (obmd_t *)(dptr+1), 0);
+-			return;
++			if (do_dropin(level+1, (obmd_t *)(dptr+1), 0))
++				rewrite++;
++			return (rewrite && !verify);
+ 		}
+ #if 0
+ 		if (strncmp(obmdp->name, "OBP", 3) == 0) {

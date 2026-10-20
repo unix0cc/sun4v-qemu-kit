@@ -1,0 +1,176 @@
+sun4v-qemu-kit
+==============
+
+Firmware for a QEMU-emulated sun4v UltraSPARC T1 machine (-M niagara): the
+hypervisor, OpenBoot and the machine descriptions, with the build system and
+the tests that make and check them.
+
+QEMU's SPARC64 documentation:
+https://www.qemu.org/docs/master/system/target-sparc64.html
+
+Where to read what
+------------------
+    README.USAGE         How to use it
+    README.configure     ./configure and the build parameters
+    REQUIREMENTS.LINUX   TOOLCHAIN=gnu path requirements
+    REQUIREMENTS.SOLARIS TOOLCHAIN=sun path requirements
+    container/README     build and test through TOOLCHAIN=gnu in a container
+    md/README            MD overview & build
+    md/REFERENCE         MD: node/property descriptions
+    build_matrix         what has been built and run, with which compilers
+    tests/README         the test gates and how to run them
+    build/hv_reset/README, build/obp/README, build/nvram/README
+                         how each part is built
+    README.S10U11        the Solaris 10 1/13 DVD image
+    LICENSE, LICENSE_CODE, LICENSE_SRC.MAP
+                         the licences, and which file is under which
+
+
+Built from the Sun/Oracle OpenSPARC T2 source release (the distribution
+also contains the code for OpenSPARC T1):
+https://www.oracle.com/servers/technologies/opensparc-t2-page.html
+
+src/ holds its hypervisor/ and obp/ directories as Sun Microsystems / Oracle
+published them, except that the prebuilt binaries in hypervisor-tools/bin are
+removed, see PRISTINE-MANIFEST. The hypervisor is built for the T1 platform
+ontario (HV_PLATFORM) and OpenBoot for the T1 targets (OBP_PLATFORM).
+
+The build never modifies src/: it applies patches/ to a copy.
+
+Only the single-strand configuration (1up-*.bin) is built and supported,
+because QEMU's niagara machine has one CPU.
+
+
+The firmware set
+----------------
+qemu-system-sparc64 -M niagara loads six files, named in hw/sparc64/niagara.c,
+from the -L directory:
+
+    reset.bin      CPU(s) reset vector(s); starts the hypervisor (hv)
+    q.bin          the hypervisor (hv)
+    openboot.bin   OpenBoot PROM (OBP)
+    1up-hv.bin     hv machine description (MD): the platform part
+    1up-md.bin     guest MD: the domain, OBP/OS visible
+    nvram1         NVRAM image: an empty stub; required by QEMU
+
+How to run them under QEMU: README.USAGE.
+
+
+Toolchains
+----------
+Every component builds two ways. TOOLCHAIN picks one (`sun` or `gnu`); the
+default follows `uname -s`.
+
+    sun   Solaris/SPARC with Sun's own makefiles and the system assembler.
+          Sun Studio 11 was used for the first builds of this tree.
+          See REQUIREMENTS.SOLARIS.
+    gnu   GNU/Linux with the sparc64-linux-gnu cross toolchain. No Sun
+          software. See REQUIREMENTS.LINUX.
+
+Without the sparc64 cross toolchain and qemu-user, build in a container:
+container/README.
+
+The gnu and sun paths give byte-identical 1up-hv.bin and 1up-md.bin. The other
+files depend on the toolchain and the build: do not compare their hashes
+between builds. q.bin also carries the git revision in its banner, so it
+changes with every commit. The release tarball differs between distributions
+(it carries q.bin and openboot.bin) and is identical within one.
+Details: build_matrix, build/hv_reset/README, build/obp/README.
+
+./configure is optional: it probes the host's compilers and tools for the sun or
+gnu path, and sets the build's parameters. README.configure.
+
+
+Machine descriptions: mdgen, mdlint
+-----------------------------------
+A machine description (MD) is the binary graph a sun4v hypervisor hands to
+its guest to describe the hardware: CPUs, memory, I/O, interrupts.
+The hv reads its own MD (1up-hv.bin) for the platform. OBP builds its device
+tree from the guest MD (1up-md.bin), and the kernel of Solaris (and its
+derivatives) builds its kernel structures from it during init. The MD is made
+of typed nodes with named properties, joined by forward and back arcs.
+
+Format: FWARC 2005/115
+https://sun4v.github.io/ARChive/FWARC/2005/115/final.materials/index.html
+
+An introduction:
+https://unix0.cc/2026/07/16/sun4v-machine-description-part-2/
+
+Sun's `mdgen` compiles the MD text source into that binary. `mdlint` checks a
+binary and, with `-t`, turns it back into text. Building the MD pair (next
+section) needs `mdgen`; `make md` builds both tools first. You can build them
+alone:
+
+    make mdtools                     # $WORKDIR/mdtools/{mdgen,mdlint}
+
+
+Building the MD pair (*-md.bin/*-hv.bin)
+----------------------------------------
+md/ holds one machine per directory, md/<target>/; TARGET=<target> picks
+it. What each machine is, what boots on it and the matching QEMU command
+line: md/README and md/<target>/README.
+
+Where <target> is:
+    legion   Sun's Legion simulator devices: an hsimd disk, a console and
+             an RTC. Runs on upstream QEMU. The default.
+    pci      a PCIe root nexus with an e1000 NIC and a cmd646 IDE controller.
+             Relies on patches/ (applied at build time) and a QEMU with
+             vpci and cmd646 support (not in upstream yet).
+
+    make md                          # legion (the default)
+    make md TARGET=<target>       # that machine
+    make md TARGET=all            # every machine, each in $OUTDIR/<target>/
+
+Output: $OUTDIR/{1up-md.bin,1up-hv.bin}.
+
+The guest RAM is part of the MD (for legion 2048 MB). To change it:
+./configure --with-md-mem=MB or make MD_MEM=MB. QEMU's -m must be the same
+number (README.USAGE). See README.configure.
+
+
+Hypervisor and reset vector: q.bin, reset.bin
+---------------------------------------------
+The hypervisor (q.bin) and its reset vectors (reset.bin) are written mostly in
+SPARC assembler, using the hyperprivileged registers and instructions of
+SPARC V9d. How they are built: build/hv_reset/README.
+
+    make hv_reset                    # $OUTDIR/{q.bin,reset.bin}
+
+Compile options: build/hv_reset/README.options.
+
+
+OpenBoot PROM: openboot.bin
+---------------------------
+openboot.bin is built by a Forth bootstrap (see diagram docs/obp-chain.png).
+It starts from one original binary of Sun's archive,
+./src/obp/obp/os/sun/sparc/forth.dic; every other dictionary is built from
+source. Both toolchain paths run the same chain, but the gnu path runs it under
+qemu-sparc32plus and qemu-sparc64 (linux-user): the dictionaries are SPARC
+machine code (REQUIREMENTS.LINUX).
+Details and proof: build/obp/README.
+An experimental way to start without forth.dic: forth_bootstrap/README.
+
+    make obp                         # $OUTDIR/openboot.bin
+    make obp-verify                  # `gnu` only: compare with Sun's own
+                                     # images (tests/full/obp/TESTS)
+
+TARGET also selects the OBP build: niagara/t1_fpga for legion,
+niagara1-hw/release for pci. See build/obp/README.
+
+
+NVRAM image: nvram1
+-------------------
+    make nvram                       # $OUTDIR/nvram1
+
+nvram1 is NVRAM_SIZE zero bytes. This is the correct content: the hypervisor,
+OBP and the MD never read it. QEMU still requires the file (niagara.c loads it
+with add_rom_or_fail()). OBP's configuration -- boot-device, console,
+devaliases -- comes from the guest MD. build/nvram/README.
+
+License
+-------
+Several licenses apply, depending on the path; LICENSE has the full map.
+
+- Our own files: BSD-2-Clause (LICENSE.BSD-2-Clause).
+- Sun's hypervisor and OpenBoot code in src/: BSD+.
+- The machine descriptions derived from Sun's (in md/): GPL-2.0-only.

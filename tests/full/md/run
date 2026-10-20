@@ -1,0 +1,27 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the MD gate: every check that needs only this repository, the GNU cpp, and Sun's T1 tree
+# (for the reference). Stops at the first failure: pinned/roundtrip assume the toolchain already
+# reproduces Sun's binaries.
+#   roundtrip   our configs: deterministic, three hashes equal through unfold/mdgen/mdlint/unfold/mdgen
+#   graph       no dangling arcs (mdlint misses them), one root, every fwd/back paired (FWARC 2005/115), all reachable
+#   pinned      our blobs == expected/blobs.sha256
+#   refdoc      md/REFERENCE part 1 (nodes, properties, values) == our hypervisor MD blobs
+#   -- optional, needs Sun's T1 tree (T1=):
+#   reference   Sun's sources -> our chain == Sun's shipped binaries; they unfold/refold to themselves
+# Usage: run [roundtrip|graph|pinned|refdoc|reference ...]     Env: OUTDIR, T1 (the unpacked OpenSPARC T1 tree; no default)
+set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Given OUTDIR (make passes one inside WORKDIR): used as it is. Else a scratch directory, removed when everything passed.
+if [ -z "${OUTDIR:-}" ]; then
+  OUTDIR=$(mktemp -d "${TMPDIR:-/tmp}/md-test.XXXXXX"); OUT=$OUTDIR
+  trap 'rc=$?; [ $rc = 0 ] && rm -rf "$OUT"; exit $rc' EXIT
+fi
+export OUTDIR
+# Default: only OUR blobs, nothing outside this repository. `run reference` adds the Sun comparison (needs the T1 tree).
+for name in ${*:-roundtrip graph pinned refdoc}; do
+  echo; echo "# $name"
+  "$HERE/internal/$name.sh" || { echo "run: $name FAILED" >&2; exit 1; }
+done
+echo; echo "md tests: all passed"

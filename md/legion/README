@@ -1,0 +1,57 @@
+md/legion -- the no-PCI machine
+===============================
+
+The only machine that reaches the OpenBoot ok prompt on unmodified upstream
+QEMU. Its disk is Sun's Legion simulator disk, driven by hsimd
+(https://github.com/artyom-tarasenko/hsimd).
+
+    make md  TARGET=legion        # default TARGET
+    make all TARGET=legion        # obp niagara/t1_fpga, hv ontario/legion
+
+QEMU command line
+-----------------
+    qemu-system-sparc64 -M niagara -L <outdir> -m 2048 -nographic \
+        -drive if=pflash,file=<disk.img>,format=raw
+
+    ok boot disk
+
+The niagara machine maps the first IF_PFLASH drive as a RAM-backed ramdisk at
+0x1f40000000 (NIAGARA_VDISK_BASE) -- writes never reach the file, so every
+boot starts clean and readonly= is irrelevant. That 512 MB (or whatever the
+image is) is on top of -m. A -drive without if=pflash is ignored: OBP then
+finds nothing at disk@0 and `boot disk` faults (trap 0x32, MAXTL).
+
+The guest
+---------
+The hsimd driver exists in practice only in Sun's experimental builds, such as
+disk.s10hw2: a Solaris 10 guest boots from it. With more than 2048 MB of RAM
+the guest uses 256M pages, which stock QEMU does not decode correctly; that
+needs a QEMU patch, "target/sparc: implement TTE page size for 32M/256M
+pages" (not in upstream yet; qemu-devel, 2026-09-18:
+https://lore.kernel.org/r/20260918105705.433093-1-sun4qemu@gmail.com ; a copy
+is in github.com/unix0cc/qemu-experimental-patches, upstream/). A CD image
+attached as the disk boots too: OpenBoot reads it into a ramdisk, so the guest
+needs no hsimd (boot /virtual-devices/disk@0:f).
+
+How far a CD image gets depends on the Solaris release: older releases are less
+restrictive about the machine description, newer ones more. The parameters of
+these MDs are enough to initialise the kernel up to Solaris 11.2. Solaris 11.x
+is out of scope now.
+
+What is in it
+-------------
+The virtual-devices tree only: the Legion disk, the console (the qcn OS console
+driver), nvram and the RTC. There are no LDC channels: the guest MD has no
+channel-devices, channel-endpoints, vldc, vcc or vds nodes, and the hv MD has no
+ldc_endpoint nodes. The hv MD does keep a bare channel_devices node under
+guest0, because the hypervisor asserts on its cfghandle for every guest
+(res_guest.c) and dies silently without it; the guest MD has no counterpart. The
+disk node carries compatible = "SUNW,legion-disk", the OBP dropin that drives
+it; that dropin is in niagara/t1_fpga and NOT in the pci OBP, which is why the
+two configs have separate OBP targets (config.mk).
+
+    disk  = /virtual-devices/disk@0
+    vdisk = /virtual-devices/disk@0      second name for the same device
+
+boot-device is "disk". platform.mac-address (0x8003dead03) is cosmetic --
+there is no NIC on this machine.

@@ -1,0 +1,18 @@
+# Build output goes to $(OUTDIR) -- see config.mk. By default that is ./output, so that path is ignored here
+# (a CANONICAL_TREE set in config.mk builds to ~/build/sun4v-qemu-kit/<toolchain> instead). /out/
+# is a safety net for anyone who points OUTDIR back inside the repo by hand.
+/output/
+/out/
+# build/obp/gnu/engine/Makefile writes to OUT, which build-obp.sh points under
+# $(OUTDIR); this catches a bare `make -C build/obp/gnu/engine` by hand.
+build/obp/gnu/engine/out/
+__pycache__/
+*.pyc
+
+# ./configure output (configure.ac); the generated configure itself is kept
+/config.auto.mk
+/config.log
+/config.status
+/autom4te.cache/
+/config.wrap/
+/release/

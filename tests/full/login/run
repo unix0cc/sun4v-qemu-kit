@@ -1,0 +1,61 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the login gate for the legion configuration: boot its firmware set under the DISTRIBUTION's QEMU, type `boot disk` at the
+# OpenBoot prompt and require Solaris's `console login:`. The boot gate (tests/full/boot) stops at the prompt; this is the one that
+# runs the guest kernel. It needs a guest disk, which is not part of this repository: GUEST_DISK=<image>, a Solaris 10 disk with the
+# hsimd driver for Legion's simulated disk (the OpenSPARC T1 archive's S10image/disk.s10hw2). Without it the gate is skipped (exit 3).
+#
+# Usage: run [FWDIR]      FWDIR = a firmware set (reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin), e.g. <unpacked release>/legion.
+#                         Without it, legion's set is built from this tree (`make all TARGET=legion`).
+#        run selftest     boots an EMPTY disk and expects "the OpenBoot prompt came back" (the detector works), no GUEST_DISK needed
+# Env:   GUEST_DISK, QEMU, OUTDIR (scratch; the console log lands there), ATTEMPTS (3), T_OK (120), T_LOGIN (300), T_STALL (240),
+#        BOOT_CMD (`boot disk`).
+# -m follows the set: the 4th field of FWDIR/.md-signature, else the `memory` line of RELEASE-INFO next to it, else 2048.
+# Exit:  0 login prompt seen; 1 the guest did not get there (panic, trap, boot failed, stall); 2 could not run / no ok prompt / the
+#        OpenBoot Level 14 flake on every attempt; 3 skipped (no GUEST_DISK).
+set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); REPO=$(cd "$HERE/../../.." && pwd)
+MODE=run; FWARG=
+case "${1:-}" in selftest) MODE=selftest;; "") ;; *) FWARG=$1;; esac
+if [ -n "${OUTDIR:-}" ]; then OUT=$OUTDIR   # make passes one inside WORKDIR: kept for inspection, removed by make clean
+else OUT=$(mktemp -d "${TMPDIR:-/tmp}/login-test.XXXXXX"); trap 'rc=$?; [ $rc = 0 ] && rm -rf "$OUT"; exit $rc' EXIT; fi
+mkdir -p "$OUT"
+
+if [ "$MODE" = selftest ]; then DISK=$OUT/empty-1M.img; head -c 1048576 /dev/zero > "$DISK"
+else
+  DISK=${GUEST_DISK:-}
+  if [ -z "$DISK" ] || [ ! -f "$DISK" ]; then
+    echo "skip  login gate: GUEST_DISK is not set to an existing image (a Solaris 10 disk with the hsimd driver, e.g. S10image/disk.s10hw2)"
+    echo "      It must be in the environment: GUEST_DISK=<image> make login-verify, or export GUEST_DISK=<image> first."; exit 3
+  fi
+fi
+
+. "$HERE/../../lib/qemu.sh"
+resolve_qemu
+[ -x "$Q" ] || { echo "cannot run: $Q not executable" >&2; exit 2; }
+print_qemu
+
+if [ -n "$FWARG" ]; then FW=$(cd "$FWARG" && pwd)
+else
+  make -s -C "$REPO" all TARGET=legion TOOLCHAIN=gnu OUTDIR="$OUT/fw/legion" WORKDIR="$OUT/work/legion" > "$OUT/build-legion.log" 2>&1 \
+      || { echo "FAIL: firmware build failed, see $OUT/build-legion.log" >&2; exit 1; }
+  FW=$OUT/fw/legion
+fi
+for f in reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin; do [ -f "$FW/$f" ] || { echo "cannot run: $FW/$f missing" >&2; exit 2; }; done
+MEM=$(cut -d'|' -f4 "$FW/.md-signature" 2>/dev/null || true)
+if [ -z "$MEM" ]; then
+  MEM=$(sed -n 's/^memory .*legion \([0-9]*\) MB.*/\1/p' "$FW/../RELEASE-INFO" 2>/dev/null | head -1)
+fi
+MEM=${MEM:-2048}
+echo "firmware: $FW   -m $MEM   disk: $DISK"
+
+ARGS=(--name legion --outdir "$OUT" --fw "$FW" --attempts "${ATTEMPTS:-3}" --t-ok "${T_OK:-120}" --t-login "${T_LOGIN:-300}" --t-stall "${T_STALL:-240}" --boot-cmd "${BOOT_CMD:-boot disk}")
+QARGS=(-M niagara -accel tcg,thread=single -m "$MEM" -L "$FW" -drive if=pflash,file="$DISK",format=raw,readonly=on)
+
+if [ "$MODE" = selftest ]; then
+  set +e; python3 "$HERE/lib/logindrv.py" "${ARGS[@]}" --attempts 1 --t-login 120 -- "$Q" "${QARGS[@]}" 2> "$OUT/selftest.err"; rc=$?; set -e
+  if [ $rc = 1 ] && grep -q "prompt came back" "$OUT/selftest.err"; then echo "ok  selftest: an empty disk is caught (the OpenBoot prompt came back, no login)"; exit 0; fi
+  echo "FAIL selftest: expected rc=1 'prompt came back', got rc=$rc" >&2; cat "$OUT/selftest.err" >&2; exit 1
+fi
+python3 "$HERE/lib/logindrv.py" "${ARGS[@]}" -- "$Q" "${QARGS[@]}"

@@ -1,0 +1,711 @@
+OBP: how the GNU/Linux build of openboot.bin is checked against Sun's
+======================================================================
+
+Nothing here is "looks the same". Every line below is a cmp, a run, or a
+boot, with the measured numbers kept. Where a difference remains it is named,
+explained and shown not to matter -- never waved away.
+
+The gate is seven scripts under tests/full/obp/internal/; run it rather than
+trusting a status line in a file:
+
+    make obp-verify                 # no tarball, no Solaris host
+
+tests/full/obp/README maps the directory. This document is the argument: what is
+claimed (1), against what (2), by which tests (3, 4), what still differs and
+why none of it is a defect (5), everything the GNU path does differently (6),
+what is NOT covered (7), and how to re-run any of it (8). Appendix A keeps
+the history -- how byte identity was reached in the first place, against a
+Solaris build of our own, before Sun's own shipped images became the
+reference.
+
+
+1. The claim
+------------
+
+openboot.bin built on GNU/Linux with build/obp/gnu/ is equivalent to the one
+Sun's own toolchain builds on Solaris from the same source. "Equivalent" is
+three separate claims, each proven by its own method:
+
+  BYTE-IDENTICAL   The same bytes. Holds for every dropin record of the two
+                   images Sun itself built and shipped -- niagara2/release
+                   (Sun's 2007 build) and niagara/t1_fpga (Sun's 2009 image)
+                   -- rebuilt here from pristine source (sun-records); for
+                   every kernel dictionary bootstrapped from Sun's root
+                   (dic-kernels); and, against a Solaris build of our own,
+                   for every dropin and -- with the C compiler taken out of
+                   the comparison -- the reset record too (Appendix A).
+
+  FUNCTIONALLY     The same function, proven by running it. Holds for the one
+  IDENTICAL        piece of C compiled differently by design, decomp.c: both
+                   compilers' objects decompress every real payload in the
+                   image to identical output (decomp-ab).
+
+  FUNCTIONALLY     The same behaviour, proven by booting. Both machine
+  EQUIVALENT       configurations reach the Solaris login prompt on the
+                   GNU-built image (the boots, section 4).
+
+What differs after all that is five named classes, all measured, none of them
+changing what the PROM does: two never reach the image at all, one is dead
+the moment the PROM re-initialises at cold start, one is a build stamp that
+is meant to differ, and the last is the same code from another compiler --
+run and compared output for output. Section 5.
+
+No file under src/obp is edited on either path -- both build in a copy and
+apply patches there. Every difference between the two builds is in the build
+layer, inventoried in full in section 6.
+
+
+2. The two builds
+-----------------
+
+REFERENCE (Sun toolchain)
+  Host        a Solaris 10 guest under QEMU
+  Tools       Sun Studio cc, /usr/ccs/bin/make (dmake syntax),
+              ld -M openboot.map, elf2bin, the native 32-bit
+              os/unix/sparc/forth and 64-bit os/unix/sparcv9/forth, native
+              makedi / makeprom / didepend
+  Source      this repository + patches/obp/forth/*.patch, as
+              build/obp.mk applies them
+  Capture     two build trees (pci and legion), each with obp.truss (every
+              execve with full argv), the build log, every intermediate,
+              per-file checksums, and for pci the 29 individual dropin
+              records. Kept outside every repository -- it is a gigabyte of
+              build trees, and nothing in the gate needs it any more. Only
+              Appendix A does.
+  Identity    pci openboot.bin 348,524 B, sha256
+              bda03a570d8c56992ae7e4f2f1ad9c499c3927e5efb7649faea3a843d524359e
+
+GNU (build/obp/gnu/)
+  Host        Ubuntu 24.04 x86_64
+  Tools       sparc64-linux-gnu-gcc 13.3.0, GNU ld 2.42, GNU make, patch,
+              LC_ALL=C sort; qemu-sparc64 and qemu-sparc32plus linux-user
+              (either a build of our own or Ubuntu's qemu-user-static -- the
+              second-emulator test shows the output is the same); the cross
+              gcc's -m32 multilib for the 32-bit engine
+  Engine      one source (wrapper.c, fsys.c), cross-built twice by
+              engine/Makefile and split exactly the way Sun's build splits
+              its two native engines:
+                forth32 (-m32, under qemu-sparc32plus) bootstraps every
+                  dictionary from forth.dic, then runs the tokenizer, the
+                  fonts and the logo
+                forth64 (under qemu-sparc64) builds bootprom.bin, stand.dic
+                  and reset.o
+              Five patches, patches/obp/gnu/*.patch, applied in one staging
+              step (rows 2, 4, 8, 19-21 of section 6); the engine and host
+              tools compile with no warning under
+              -Werror=implicit-function-declaration,implicit-int,format.
+  Source      the same tree + the same four patches/obp/forth/*.patch
+  Identity    deliberately not quoted. A build stamps its commit date and
+              hash into version.fth AND into the OBP record's own header
+              (section 5, the build-stamp class). The stamp is reproducible
+              per commit now, but these runs were of a dirty tree, which
+              stamps the build time, so a whole-image hash of them means
+              nothing as a reference. Identity is established per record
+              instead, which is what sun-records does.
+
+Driver:  QEMU_SPARC64=... QEMU_SPARC32=... OUTDIR=<dir> \
+             build/obp/gnu/build-obp.sh <platform>/<target>
+         (niagara/t1_fpga = legion, niagara1-hw/release = pci)
+Pristine: add OBP_PATCHES= to build Sun's source with none of our patches.
+Mixed:   add REFERENCE_DIR=<a reference release dir> to take
+         decomp.o/version.fth/revlevel from the reference and keep everything
+         else GNU. Used by Appendix A, and by sun-records for the stamp.
+
+
+3. The gate: make obp-verify
+-----------------------------
+
+Seven scripts, tests/full/obp/internal/*.sh, run in this order by
+tests/full/obp/run (`make obp-verify` and `make obp-test` are the same thing).
+Each is independently runnable; `run` shares one pci build across those that
+need it (lib/build-pci.sh), so the whole gate is one build, not four. Order is
+by dependency: a later test's claim rests on an earlier one, so `run` stops at
+the first failure rather than repeating it under another name.
+
+src-intact
+    PRISTINE-MANIFEST's sha256 for every vendored file matches the working
+    tree. No QEMU, no build; one sha256sum -c pass over every file of the
+    manifest.
+    It proves only internal consistency -- that the tree is what this
+    repository claims was imported. Whether that claim is honest is
+    src-pristine's job (section 4).
+    Found on its first run: a file edited after import without the manifest
+    being regenerated. Fixed.
+
+dic-kernels
+    The three kernel dictionaries a pci build bootstraps from forth.dic --
+    kernel-xref, k32t32-xref, k64t32 -- equal the copies Sun shipped in
+    src/obp byte for byte, and the six word listings (.fth, .headless.fth)
+    match line for line below the copyright banner Sun's 2009 packaging
+    prepended to generated files too.
+    These need no reconciliation at all, unlike the host dictionaries below:
+    they are pure kernel saves, with no live user area and the same origin as
+    Sun's.
+
+dic-fixpoint
+    The chain is a fixed point, on this engine and not only on Sun's.
+    Every build already asserts the first-generation fixpoint as a build-time
+    check inside bootstrap-dics.sh (kernel-xref == k32t32-xref: the 32-bit
+    kernel is metacompiled twice, once by the shipped root and once by a host
+    rebuilt around the new kernel, and the two must agree -- the property
+    Sun's own depend.mk:177-180 relies on when it offers the -xref models as
+    forth.dic replacements). This test adds the second generation: bootstrap
+    once from Sun's root (gen1), then bootstrap again using gen1's own
+    forth32-xref.dic AS the root (gen2).
+    Measured: gen2 reproduces that root byte for byte, and all twelve
+    artefacts (six dictionaries, six listings) are identical between gen1 and
+    gen2. Previously measured only on the Solaris host with Sun's native
+    engine (section 4, the Solaris bootstrap); this is the same result on
+    the cross-built one.
+
+dic-host
+    The HOST dictionaries -- forth32-xref.dic and f32t32.dic, the ones this
+    build actually runs rather than merely metacompiles -- against Sun's
+    shipped copies. These cannot be byte-identical, for two independent and
+    already-understood reasons:
+      - Sun's shipped copies were saved WITHOUT -D SUN4V and therefore lack
+        one assembler word, rdver ([ifndef] SUN4V, cpu/sparc/assem.fth:386-388);
+        Sun's own sun4v build recipe passes -D SUN4V to these steps
+        (PLATFLAGS, niagara1-hw/release/Makefile:55) and so does
+        bootstrap-dics.sh. That word's absence shortens the text by 20 bytes
+        and shifts everything after it.
+      - They are live-run saves, so they also carry this engine's own
+        addresses: the engine-binary-address class (section 5).
+    lib/dic-diff.py separates both from real content differences. It compares
+    the body as 4-byte cells, locates every length-changing region, and for
+    each remaining differing cell tries the entry-delta correction, the shift
+    in bytes (a stored dictionary address whose target moved), and the shift
+    in instruction words (a SPARC CALL's displacement counts instructions,
+    not bytes, so a call site and target on opposite sides of the cut differ
+    by shift/4). What is left in the data/user-area region it reports
+    separately as the accepted class, not as a failure.
+    Measured on both dictionaries: tlen differs by exactly -20 B; every
+    differing cell in the text region is explained by those corrections (byte
+    shifts, call-word shifts, entry-delta, the global shift), and the rest
+    fall in the user-area tail. Nothing is left unexplained in the text
+    region. The counts are printed by the test.
+    tokenize.dic is deliberately NOT compared this way. It carries the same
+    rdver shift plus several smaller ones from loadtok.fth's own
+    conditionals, close enough together that a single global shift constant
+    does not separate them. Its correctness rests on what it produces
+    instead -- every tokenized dropin byte-identical to Sun's (Appendix A) --
+    which is exactly the principle section 5 states for any saved image.
+
+sun-records
+    Pristine builds (OBP_PATCHES=, none of our patches) of the two targets Sun
+    shipped an image of, walked record by record against
+    tests/full/obp/expected/sun-records.sha256: the same record names in the
+    same order, and every record's sha256 equal to Sun's.
+    Every record is hashed and identical except OBP and bootprom in each
+    image, which are compared by name and position only, for the reasons in
+    section 5 (a different C compiler; the engine-binary-address class; the
+    build stamp).
+    The expected file is committed, so this needs no tarball. Regenerating it
+    does: external/sun-records-regenerate.sh, section 4.
+
+patch-locality
+    This project's four patches/obp/forth/*.patch change only what they say
+    they change. Three of them touch device drivers that each become their
+    own dropin -- obp/dev/ide/pci and obp/dev/network/ophir, i.e. the records
+    named class010100 and ophir in the pci configuration. The fourth,
+    md-iodevice-reg-guard.patch, touches arch/sun4v/md-iodevice-props.fth,
+    core Forth source that ends up inside the bootprom record.
+    A pristine pci build and the patched (product) build are therefore
+    required to differ in exactly four records -- ophir, class010100,
+    and the two that are unscored anyway (OBP, bootprom) -- and the two
+    device dropins must ACTUALLY differ, or the patches did nothing and
+    "identical everywhere" would be a false pass. Measured: every other
+    record byte-identical, the four expected ones differing.
+    Two things this test turned up on its first run:
+      - The pci chain carries two DISTINCT records both named "support-pkg"
+        (Sun's own dropins.src binds that package into more than one
+        subtree). lib/records.py therefore compares by chain position, never
+        by name; a name-keyed map would have silently dropped one.
+      - The OBP record embeds version.fth's stamp in its header: section 5,
+        the build-stamp class.
+    What this test cannot show is the locality of md-iodevice-reg-guard.patch
+    itself, since its effect lands inside bootprom, which is unscored for
+    unrelated reasons. Stated as a limit, not assumed away.
+
+dict-content
+    The pci build's stand.dic word list -- every word in every vocabulary,
+    via the dictionary's own `words` (lib/dict-dump.sh) -- against
+    tests/full/obp/expected/dict-dump.sha256.
+    This is a regression check on our own output, not a comparison with Sun:
+    a saved image's byte hash is useless as a criterion (section 5) but the
+    set of word NAMES does not move on a harmless recompile. The stronger
+    claims are sun-records and patch-locality; this is a cheap third check on
+    the same ground.
+
+Checked to fail: corrupting one hash in expected/sun-records.sha256 produces
+FAIL with the diff, not a silent pass.
+
+
+4. Evidence outside the gate
+-----------------------------
+
+Measurements the gate does not repeat, because each needs something the gate
+deliberately does not require: the OpenSPARC tarball, a Solaris host, a boot,
+or a second emulator. Each is re-runnable with the resource it names.
+
+src-pristine                                    needs the tarball
+    Every file PRISTINE-MANIFEST records really is what Sun shipped, hashes
+    re-derived from OpenSPARCT2_Arch.1.2.tar.bz2 rather than taken on trust
+    from the manifest. This is the half of provenance src-intact cannot do.
+    Measured: every file of the manifest matches exactly (the hypervisor and
+    obp members of the archive). One pass over the whole bzip2 archive.
+        make obp-test-external TARBALL=<tarball>
+
+sun-records-regenerate                          needs the tarball
+    Rewrites tests/full/obp/expected/*.sha256 from Sun's own two shipped images
+    and a fresh build. Run it after a change to src/obp, and review the diff
+    before committing -- regenerating silently accepts whatever the tree
+    currently produces, which is only right if that tree is known good.
+    Checked: run with no source change, it reproduces both committed files
+    byte for byte.
+
+decomp-ab: the one C file compiled differently, run rather than read
+    Isolates decomp.c, compiled by Sun cc in one build and GCC in the other.
+    lib/decomp-ab/decomp-ab.sh links a freestanding harness (no libc, raw
+    ta 0x10 syscalls) against each object in turn and runs it under
+    qemu-sparc32plus on every COMP record's payload, calling
+    decompress(payload+0x10, comp_size, dest) exactly as
+    arch/sun/reset-dropin.fth:131-153 does.
+    Measured: 28 of 28 payloads decompress identically between the two
+    objects; 28 of 28 output lengths match the header's uncompressed size;
+    26 of 28 match the original uncompressed source byte for byte (font and
+    usbkbds have no surviving source -- Sun's own recipe deletes the .fnt
+    after makedi). Payloads from 512 B (sun-logo.dat) to 419,616 B
+    (bootprom.bin). Object sizes differ as expected: GCC .text 968 B against
+    Sun's 1,268 B.
+
+A second, independent emulator
+    Isolates our own qemu-sparc64 build: the same mixed build run under
+    Ubuntu's qemu-user-static 8.2.2 and under a clean-room build of QEMU from
+    source.
+    Measured: every artefact identical, stand.dic and bootprom.bin included.
+    The guest brk placement for a static sparc64 binary comes from the binary,
+    not from the emulator, so the emulator cannot leak into a saved image.
+    Stock qemu-user-static is a valid QEMU_SPARC64.
+
+The boots
+    The current evidence is the login gate (tests/full/login, run by make
+    test-all): legion booted to Solaris's login prompt from a clean commit,
+    in three containers and on the host. pci is booted by hand
+    (build_matrix, section 8).
+
+    The first boots of this build, 2026-09-29, from an uncommitted tree
+    (banner "git <rev>-dirty") -- dictionaries bootstrapped from forth.dic,
+    32-bit tokenizer -- both configs from one firmware set:
+    pci: boots to the Solaris 10 login prompt (SunOS 5.10 Generic_147147-26).
+   https://unix0cc.github.io/md-artefacts/obp-gnu32-pci-4096__s10u11_fast.txt
+    legion: boots to the login prompt (SunOS 5.10 Generic_118822-23).
+   https://unix0cc.github.io/md-artefacts/obp-gnu32-legion-4096__disk.s10hw2.txt
+    The earlier runs, before the dictionary bootstrap, with the same result:
+   https://unix0cc.github.io/md-artefacts/obp-gnu-pci-4096__s10u11_fast.txt
+   https://unix0cc.github.io/md-artefacts/obp-gnu-legion-4096__disk.s10hw2.txt
+
+    The pci boot needs a QEMU that gives each PCI slot its own interrupt
+    line (INTx swizzled by slot). md/pci's interrupt map routes each slot to
+    its own ino; a QEMU that routes every slot's INTA to one ino delivers
+    the mpt controller's interrupts to the NIC's ino instead. Seen on
+    2026-09-29: the same firmware under such a build reached the kernel and
+    then looped on mpt "Disconnected command timeout"; under a build with
+    the swizzle it booted. That build differs in other patches too, so the
+    mechanism is read from the code, not isolated or observed in the guest.
+    The same symptom from an ad-hoc launch line in the first pci run was
+    recorded then as launch configuration, not firmware.
+
+Build from clean, repeatedly, and by someone else
+    rm -rf OUTDIR, build, verify the dropin chain. Built clean three times in
+    scratch and then in a fresh clone by someone else, chain verified each time
+    (for pci and for legion, ending exactly at EOF).
+
+The Solaris bootstrap: every shipped .dic but one is a product of this source
+    The question this answers: are the seven .dic files in src/obp opaque
+    blobs, or does the source in this tree produce them? Run on the Solaris host
+    with Sun's own toolchain and native engine, one full sun-path build per
+    generation (15-36 min each), with dictionaries deleted from src/obp
+    beforehand:
+        gen1   Sun's root, all seven .dic present
+        gen1b  Sun's root, the five intermediates deleted
+        gen2   root := gen1b's own forth32-xref.dic, five deleted
+        gen1t  Sun's root, the five AND tokenize.dic deleted -- forth.dic the
+               only .dic left in the tree
+        gen1m  as gen1, from a fresh git clone (checkout-time mtimes,
+               restore-mtimes.sh not run)
+    Measured, sha256 prefix of every dictionary the build writes:
+
+        dictionary                shipped   gen1 / 1b / 2 / 1t / 1m
+        ------------------------  --------  ------------------------
+        kernel-xref, k32t32-xref  405a81d3  405a81d3   (all five)
+        k64t32                    b1bf6067  b1bf6067   (all five)
+        forth32-xref              2820745e  53c3f5a7   (gen2: equals its root)
+        f32t32                    3f9095e6  b44534d1
+        tokenize                  db1583ec  2cbbcc93
+
+    On the GNU path the same files compare as follows (dic-kernels and
+    dic-host, section 3): the three kernel dictionaries equal the shipped
+    ones; the three host dictionaries (forth32-xref, f32t32, tokenize) differ
+    by design, as they do on Solaris. dic-host checks the first two cell by
+    cell; tokenize.dic is not compared that way, its correctness rests on the
+    dropins it produces (Appendix A).
+
+    So: the kernels rebuild from source equal to Sun's shipped files bit for
+    bit; the fixpoint is reached in one generation; the sun path needs
+    exactly one binary, forth.dic (gen1t), and does not depend on file mtimes
+    (gen1m) -- every rule lists the engine, which the build always compiles
+    fresh. Of 98 files in the release directory, 87 are identical between
+    generations; the other 11 carry either the build stamp or the build
+    directory's own path -- Sun's cc embeds it in its objects, which is why
+    two generations built in differently named directories land one byte
+    apart.
+    The shipped HOST dictionaries differ from the rebuilt ones by 20 bytes:
+    the single assembler word rdver, present only when -D SUN4V is absent.
+    Cutting those 20 bytes leaves, in f32t32, only pointers past the cut and
+    calls across it -- nothing unexplained; in tokenize, the same plus two
+    words of alignment padding. rdver never reaches a kernel, and on sun4v it
+    names an instruction that traps: "access to the VER register is now
+    hyperprivileged (and VER was renamed the HVER register)" (UltraSPARC
+    Architecture 2005, p. 13). dic-host now checks the Linux side of this
+    same comparison on every gate run.
+
+
+5. What still differs, and why none of it is a defect
+------------------------------------------------------
+
+Five classes. Each is named here because the rest of this repository refers
+to them by name -- in test scripts, in build rules, and in the comments that
+explain why a given file is compared one way and not another.
+
+5.1 The compiler class -- decomp.o
+    Sun cc -fast -xarch=v8 and gcc -m32 -mcpu=v8 -O2 emit different code for
+    the same 317-line C file. Taken out of the comparison entirely by the
+    mixed build (Appendix A: reset.bin identical once the reference's own
+    decomp.o is linked in) and shown harmless by running it (decomp-ab:
+    identical behaviour on every real payload).
+
+5.2 The engine-binary-address class -- stand.dic, bootprom.bin, any live save
+    A saved Forth image contains the dictionary origin (header offset 20) and
+    pointers into the engine's own C .data/.bss. These depend on which binary
+    saved the image -- a GCC-built static engine and a Sun-built one have
+    different heap starts and different data layouts -- and on nothing else:
+    two different emulators produce identical images (section 4). The loader
+    rebases origin-relative pointers and the engine re-establishes its own at
+    startup, which is why an image saved by either engine runs under the
+    other.
+    Measured, for bootprom.bin's 181 differing bytes: 6 bytes are three
+    32-bit dictionary addresses in the body (origin plus identical offsets);
+    175 bytes are 50 cells of the saved Forth user area in the 0x1960-byte
+    tail -- 22 dictionary pointers (`here` among them, all at the one origin
+    delta), 27 pointers into the engine binary's own .data/.bss, and one
+    2-byte residual: a user-area counter at +0x2b8 holding 0xb7f against
+    0xb7d, not an address, still unidentified by name. The PROM re-initialises
+    the user area at cold start; every host pointer in it is dead on arrival
+    in either build.
+    Consequence, and it is a rule: never use a .dic, stand.dic or bootprom.bin
+    hash as a pass/fail criterion. Compare what they produce, or run them.
+    dic-host is the one place a saved image IS compared, and only because
+    dic-diff.py can separate this class out cell by cell.
+
+5.3 The symbol-value class -- reset.o
+    The st_value of the `reset` symbol in .symtab is a runtime address; it
+    differs while the relocation tables are identical, and the mixed build
+    shows it does not reach reset.bin.
+
+5.4 The build-stamp class -- version.fth, revlevel, and the OBP record
+    Sun's build stamps the date, the logname and a COMMENT into version.fth
+    and increments revlevel; ours stamps build/stamp.sh's date
+    (SOURCE_DATE_EPOCH, else the clean commit's, in UTC) and the git
+    revision, with revlevel 0. By design, and the reason REFERENCE_DIR exists: a
+    comparison run copies Sun's whole stamp rather than pretending the dates
+    match.
+    The stamp is not confined to version.fth. The OBP record's 16-byte name
+    field carries a build timestamp after the name, and the format decodes
+    cleanly on all three images at hand:
+
+      name[16] = "OBP\0\0\0" <year:2> <month> <day> <hour> <minute> 04 00 00 7f
+
+        4f425000000007d70b070e020400007f  Sun niagara2/release  2007/11/07 14:02
+        4f425000000007d903120d320400007f  Sun niagara/t1_fpga   2009/03/18 13:50
+        4f425000000007ea091a16190400007f  a build of ours       2026/09/26 22:25
+
+    Sun's two decode to exactly the dates their own banner strings carry, and
+    ours to the minute of its version.fth stamp -- same layout, same
+    trailing four bytes. The date is version.fth's own compile-signature,
+    written into the header by save-obj (arch/sun/reset/common.fth:133),
+    and the four bytes after it are major/minor/patch-release# parsed from
+    obp-release, then 7f. An earlier note here said the dropin builder took
+    this date from the clock independently of version.fth; that was wrong.
+    Measured 2026-09-29: two builds a minute apart with one
+    SOURCE_DATE_EPOCH give byte-identical openboot.bin (and q.bin, reset.bin,
+    MDs, nvram1), and the record reads 07ea 09 1c 17 06 = the epoch's
+    2026/09/28 23:06, not the build time.
+    Two builds of different commits still differ here, patched or not:
+    patch-locality sees this, and it is one more reason (beyond the compiler
+    class) that OBP is compared by name and position rather than by hash.
+
+5.5 The path class -- dropins.mk
+    Path spelling, and one buildoptions line rewritten from dmake to GNU make
+    syntax. Neither makeprom nor makedi reads this file; every dependency
+    edge in it is the same (Appendix A).
+
+
+6. What the GNU path does differently (the whole inventory)
+------------------------------------------------------------
+
+Every deviation from Sun's build, with what proves it harmless. "Appendix A"
+in the proof column means a byte comparison against the Solaris reference
+build; a test name means the gate or section 4.
+
+  #     Sun's build             GNU path                           proof
+  ----  ----------------------  ---------------------------------  -------------
+  1     forth64 built with cc,  same source cross-built, static,   emulators,
+        native                  -fcommon, run under qemu-sparc64;  dic-kernels
+                                forth32 likewise, -m32, under
+                                qemu-sparc32plus
+  2     --                      compat.h: Solaris typedefs,        compile
+                                checksum/crc32 prototypes,
+                                PTR_ROUNDUP, <unistd.h>
+  3     termcap.c               termcap-stub.c (no-ops; no build   Appendix A
+                                step is interactive)
+  4     getmem(): sbrk          + mprotect(PROT_EXEC) -- Linux     measured
+                                gives malloc'd memory no
+                                PROT_EXEC, and the dictionary is
+                                entered as a function pointer
+  5     BP via -D and env       BP exported (the engine reads      build
+                                getenv)
+  6     32-bit forth for        the same: forth32 on the           dic-kernels,
+        tokenizer, fonts and    bootstrapped f32t32 /              Appendix A
+        logo                    tokenize.dic
+  7     host tools native cc    didepend native gcc; makedi,       Appendix A
+                                makeprom and libchksum
+                                cross-built and run under qemu
+                                (the OBMD header is raw
+                                big-endian ints)
+  8     makeprom ROUNDUP() on   PTR_ROUNDUP at the two pointer     Appendix A
+        pointers                sites (LP64 truncation)
+  9     cc -fast -xarch=v8      gcc -m32 -mcpu=v8 -O2 -fcommon     decomp-ab
+        decomp.c                -ffreestanding -fno-builtin
+  10    size -f + nawk          build/obp/gnu/tools/decomp-size.sh  Appendix A
+        getsz.awk
+  11    ld -M openboot.map +    ld -m elf32_sparc -N -s -T         Appendix A
+        elf2bin                 openboot.ld + objcopy -O binary
+  12    Sun ld COMMON order     decomp.o's six commons defined in  Appendix A
+                                the linker script in Sun's order,
+                                with ASSERT
+  13    pad-reset-bin.sh        the same script                    --
+  14    dmake common.mk (:sh,   obp-gnu.mk + obp-gnu-inner.mk      Appendix A
+        .KEEP_STATE, X:= VAR    (sub-make -C); Sun's dropins.mk,
+        += v)                   depend.mk, fonts.mk and logo.mk
+                                unchanged, common.mk never
+                                included; buildoptions X:= -> X:;
+                                %.fc with -s "$(FTHFLAGS)";
+                                builtin.di cat recipe
+                                reimplemented; -x $*.idx not
+                                reproduced
+  15    sort +1                 LC_ALL=C sort -k2                  Appendix A
+  16    release.mk              build/stamp.sh's date              5.4
+        SUBREL/DATEFMT          (SOURCE_DATE_EPOCH, else the
+                                clean commit's, UTC) + git
+                                revision, revlevel 0;
+                                REFERENCE_DIR copies Sun's stamp
+                                instead
+  16a   firmware.rel            "4.x.build_122+qemu"               compile
+        "4.x.build_122          (OBP_FIRMWAREREL), "-<ver>" added
+        ***PROTOTYPE BUILD***"  on a clean v<ver> tag; mixed
+                                builds still carry Sun's text
+  17    builds in the checkout  always in a copy (loadtok.fth      build
+                                writes to a hardcoded ${BP} path)
+  18    gpatch                  patch                              --
+  19    K&R declarations cc     12 sites GCC 14 rejects by         Appendix A,
+        accepted (implicit      default. One was a real LP64 bug:  dict-content
+        int, implicit calls,    sigset implicit -> s_signal()
+        bare `return`)          returned a pointer truncated to
+                                int (never read by the
+                                dictionary). Also the sccs-era
+                                `#define signal sigset`, skipped
+                                on Linux
+  20    ILP32 printf widths     9 widths fixed (all on             compile
+                                verbose/debug paths) plus the
+                                last warning cleanups; the build
+                                is warning-free with -Werror on
+                                the GCC 14 classes and on format
+  21    ld (Sun) on ROM         --no-warn-execstack on the reset   Appendix A
+        objects                 link: .note.GNU-stack is a
+                                userland notion, absent from
+                                objcopy -O binary either way
+  22    forth.dic -> ... ->     tools/bootstrap-dics.sh: the same  dic-kernels,
+        k64t32.dic on the       steps on forth32, in the build     dic-fixpoint,
+        native 32-bit engine,   copy, shipped intermediates        dic-host
+        every build             deleted first; then f32t32 +
+                                loadtok.fth -> tokenize.dic
+
+  Unchanged: every .fth, .tok, dropins.src and depend.mk; pad-reset-bin.sh and
+  verify-dropin-chain.sh; the four patches/obp/forth/*.patch; every on-disk
+  format.
+
+
+7. Not covered
+--------------
+
+  - niagara2/release is built pristine for sun-records, but never booted, and
+    niagara2-hw is never built at all. No TARGET selects either.
+  - What the four product patches CONTAIN is not checked against anything
+    external: no Sun build of the patched source exists, and by construction
+    none could. patch-locality checks where they land, the boots check that
+    the result runs; correctness of the change itself rests on reading it.
+  - md-iodevice-reg-guard.patch's locality, for the reason patch-locality
+    states: its effect lands inside bootprom, which is unscored.
+  - One user-area counter in bootprom.bin (5.2, +0x2b8, off by two) is not
+    identified by name.
+  - The hypervisor, the standalone reset.bin and the machine descriptions
+    build on GNU/Linux too, but their evidence is of a different kind
+    (symbol-level disassembly against Sun's binaries; booting) and lives with
+    them, not here.
+  - binfmt_misc registration is not used; the build always names the emulator.
+
+
+8. Re-running everything
+------------------------
+
+  make obp-verify                           # the gate, section 3
+  make obp-test-external TARBALL=<tarball>  # src-pristine, section 4
+  tests/full/obp/external/sun-records-regenerate.sh <tarball>
+      # rewrite expected/*.sha256, review the diff
+
+Evidence and Appendix A are by hand, and need the Solaris reference capture
+(REF below) that is not part of this repository:
+
+  export QEMU_SPARC64=/usr/bin/qemu-sparc64-static
+  export QEMU_SPARC32=/usr/bin/qemu-sparc32plus-static
+  REF=<reference capture>/release
+  cd build/obp/gnu
+
+  OUTDIR=/tmp/o-pci   ./build-obp.sh niagara1-hw/release
+  OUTDIR=/tmp/o-mixed REFERENCE_DIR=$REF ./build-obp.sh niagara1-hw/release
+  # Appendix A
+  ../../../tests/full/obp/lib/compare-reference.sh \
+      /tmp/o-mixed/<build tree>/release $REF /tmp/o-mixed/openboot.bin
+  ../../../tests/full/obp/lib/decomp-ab/decomp-ab.sh \
+      /tmp/o-pci/<build tree>/release \
+      /tmp/o-pci/<build tree>/release/decomp.o $REF/decomp.o gcc sun-cc
+
+  # the boots: -L /tmp/o-pci and a legion build, per README.USAGE
+  # a one-off dictionary bootstrap, without dic-fixpoint's gen2 comparison:
+  #   FORTH32_BIN=<engine dir>/forth32 tools/bootstrap-dics.sh /tmp/copy/obp
+  # the Solaris generations (section 4): one sun-path build each, ~25 min,
+  #   with the dictionaries deleted from src/obp beforehand
+
+
+Appendix A. History: byte identity against a Solaris build of our own
+----------------------------------------------------------------------
+
+Before Sun's own shipped images became the reference, the GNU path was brought
+to byte identity against a Sun-toolchain build of the pci configuration made on
+the Solaris host (section 2). Those tests were the gate until sun-records
+replaced them -- sun-records needs no capture and compares against images Sun
+itself built, which is strictly stronger. The mixed-build facility they
+introduced (REFERENCE_DIR) is still in obp-gnu.mk, and sun-records uses it for
+the stamp.
+
+They are kept because they are what actually found the defects, and because
+the summary below is the only place the whole per-artefact comparison
+against a Solaris build is written down.
+
+  artefact        normal build            mixed build     verdict
+  --------------  ----------------------  --------------  ----------------------
+  builtin.fth     identical               identical       byte-identical
+  dropins.mk      differs                 differs         path class (5.5)
+  *.fc (24)       identical               identical       byte-identical
+  *.di (27)       identical               identical       byte-identical
+  decomp.o        differs                 identical       compiler class (5.1)
+  version.fth     differs                 identical       build-stamp class
+                                                          (5.4)
+  stand.dic       247 B from byte 22      226 B           engine-address class
+                                                          (5.2)
+  bootprom.bin    202 B                   181 B           engine-address class
+                                                          (5.2)
+  headers         identical               identical       byte-identical
+  acfheaders      identical               identical       byte-identical
+                                                          (LC_ALL=C)
+  reset.o         19 B                    2 B             symbol-value class
+                                                          (5.3)
+  reset.symbols   identical               identical       byte-identical
+  reset.bin       975 B, 0 before 0xa58   identical       decomp code only
+  openboot.bin    OBP + bootprom          bootprom only   records otherwise
+                                                          identical
+
+The tokenizer route that no longer exists
+    Before the 32-bit engine, the GNU path tokenized with the 64-bit one, on
+    two dictionaries Sun's build never makes (f64t32.dic and tokenize64.dic),
+    generated once on Solaris and vendored as "seeds". Two measurements
+    justified that route and are the reason it could be retired without
+    re-proving anything downstream:
+      - Every .tok in the tree tokenized twice on Solaris, with the shipped
+        32-bit forth and with a 64-bit forth64: 42 of 42 FCode outputs
+        identical, 128 B to 23,812 B, no exceptions. The engine's width does
+        not reach the product.
+      - The seeds regenerated on Linux against the Solaris pair: the .dic
+        images differ as expected (engine-address class) while all 54
+        products are identical.
+    The seeds and their build target were deleted when bootstrap-dics.sh made
+    them unnecessary.
+
+Dropin list generation (didepend)
+    builtin.fth identical (5,000 B). dropins.mk differs only in the path
+    spelling and in one buildoptions line rewritten from dmake to GNU syntax;
+    every dependency edge is the same.
+
+Every tokenized dropin and every makedi record
+    24 of 24 .fc and 27 of 27 non-bootprom .di identical -- after this exact
+    comparison found two real build-layer defects:
+      - dropins.src's `buildoptions vpci.fc:= FTHFLAGS += [define]
+        64BIT-ASSIGNED?` passed through by didepend in dmake syntax and
+        silently dropped by GNU make, with %.fc never passing -s
+        "${FTHFLAGS}": vpci.fc was missing probe-reg.fth:405's
+        assigned-addresses block, 24 functional bytes.
+      - font.di was named gallant-romfont by an override of Sun's fonts.mk
+        recipe, whose own name is `fonts` (17 bytes: the name and the header
+        checksum).
+    The hypothesis both defects had been blamed on -- "comp.c compiled by gcc
+    compresses differently" -- was refuted in the process: every LZW payload
+    is identical.
+
+Mixed link: the GNU chain with the reference's own decomp.o
+    reset.bin identical (3,964 B). Before openboot.ld pinned Sun ld's COMMON
+    allocation order it differed in 70 bytes, all sethi/or immediates for
+    decomp.o's six tentative symbols (input, tab_prefix, tab_suffix,
+    data_count, output, de_stack), which the two linkers place in .bss in
+    different orders; proven by relinking with --defsym at Sun's addresses,
+    which made them identical. reset.o still differs in 2 bytes (5.3).
+    reset.symbols, headers and acfheaders identical -- acfheaders only with
+    LC_ALL=C sort, which is 1,138 B off under another locale's collation.
+
+openboot.bin, record by record
+    29 records; OBP and 27 dropins identical, bootprom differing (26,121
+    bytes of an LZW-compressed record whose input differs by 181 bytes, 5.2).
+    The first differing byte of the whole file is 3,972: that record's own
+    size field.
+
+decomp-size against the reference's object
+    1314, matching Sun's own getsz.awk value for it.
+
+Older labels
+    Earlier revisions of this document, and the project's working notes,
+    numbered these tests T1-T15. The names replaced them when the gate became
+    separate scripts:
+
+        T1, T2      the tokenizer route that no longer exists (above)
+        T3, T4      didepend; tokenized dropins and makedi records (above)
+        T5, T6      mixed link; openboot.bin record by record (above)
+        T7          decomp-ab                          (section 4)
+        T8          a second, independent emulator     (section 4)
+        T9, T10     the boots                          (section 4)
+        T11         decomp-size on the reference       (above)
+        T11a        dict-content                       (section 3)
+        T12         build from clean, repeatedly       (section 4)
+        T13         the Solaris bootstrap              (section 4)
+                    and its Linux half, dic-fixpoint   (section 3)
+        T14         dic-kernels, dic-host              (section 3)
+        T15         sun-records                        (section 3)

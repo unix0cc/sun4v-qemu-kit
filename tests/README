@@ -1,0 +1,72 @@
+tests/ -- what runs, and where
+==============================
+
+    make test          the shortest check, for anyone: boots a firmware set and
+                       requires the banner and OpenBoot's `ok` prompt
+                       (tests/smoke/). A few seconds. Needs qemu-system-sparc.
+                       On the `sun` path it runs sun-verify instead.
+    make test-all      everything below on the gnu path, one PASS / FAIL / SKIP
+                       line per gate and a table at the end (tests/run-all;
+                       also: make test-full, tests-full). About three minutes
+                       with a warm cache. On the `sun` path: sun-verify.
+    make sun-verify    on Solaris with the sun path: the sun-built MDs and
+                       hypervisor (tests/sun/)
+
+The gates of test-all, each also a make target of its own
+(tests/full/<dir>/README):
+
+    smoke   make test          banner and ok prompt
+    md      make md-verify     MD well-formedness, reproducibility, pinned
+                               hashes (md-verify-reference: vs Sun's binaries)
+    boot    make boot-verify   legion booted to OpenBoot: device tree,
+                               properties, MD <-> OpenBoot
+    hv      make hv-verify     the GNU-built q.bin / reset.bin: GNU as vs Sun
+                               as, offsets.h
+    workdir make workdir-verify the work directory: made with a marker, cleaning
+                               removes nothing that is not ours
+    guards  make guards-verify what the Makefile refuses before it builds:
+                               MD_MEM, paths, a moved tree, two machines or two
+                               makes in one OUTDIR, the wrong toolchain
+    tools   make tools-verify  a gate that exits 0 with a FAIL line is a FAIL;
+                               the release's md/ bundle keeps every file
+    obp     make obp-verify    openboot.bin against Sun's own images
+    login   make login-verify  legion booted to Solaris's login prompt; needs
+                               a guest disk (GUEST_DISK=<image>), else SKIP
+    sun     make sun-verify    the sun path, on Solaris only (tests/sun/README)
+
+tests/run-all runs the gates in that order. PASS: the gate exited 0. FAIL: it
+did not (the end of its output is shown, the whole log is kept). SKIP: it
+cannot run here (no GUEST_DISK, not on this path), with the reason. Exit code 1
+if a gate failed. `tests/run-all -v` shows the output of every gate,
+`--only md,boot` / `--skip login` pick gates, `--list` lists them,
+`--color never` turns off colour and box lines (they are on only for a
+terminal that can show them; NO_COLOR is honoured).
+
+Where the gates work: `make` gives each one a directory inside WORKDIR
+(md-test, boot-test, login-test, sun-test, hv-test, obp-test, test-all for the
+logs, smoke for the cached firmware set of `make test`). A gate starts with a
+clean directory, leaves it for you to look at, and `make clean` removes it
+with the rest of WORKDIR. An OUTDIR you give `make` is never used by a gate.
+Run by hand (tests/full/md/run, ...) a gate works in a directory under $TMPDIR
+and removes it when it passed; with OUTDIR=DIR in the environment it uses DIR
+and leaves it.
+
+The gnu path (Linux) runs all gates but sun. On the sun path (TOOLCHAIN=sun,
+Solaris) none of the others can run (they need QEMU, python3, sha256sum or the
+GNU compiler), so test-all marks them SKIP with the reason and runs only the
+sun gate.
+
+    lib/qemu.sh    how the tests find qemu-system-sparc64 (shared by smoke,
+                   full/boot and full/login)
+    lib/gate.sh    wraps a gate: the gate's own output, then one PASS / FAIL /
+                   SKIP line in the format of the table; every make target
+                   above runs its gate through it, so `make login-verify`
+                   ends the same way as a line of test-all
+
+    config.auto.mk  The gates pin the default firmware, so for a gate target
+                   (test, test-all, *-verify, hv-test, obp-test) config.mk
+                   ignores what ./configure wrote for TARGET, MD_MEM and
+                   HV_UART and exports GATE_HERMETIC=1 to every make the gate
+                   starts; the recorded tools are kept. A gate script run
+                   directly (tests/full/md/run, ...) is not covered: give it
+                   GATE_HERMETIC=1 or a tree without config.auto.mk.

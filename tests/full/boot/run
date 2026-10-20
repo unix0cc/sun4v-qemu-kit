@@ -1,0 +1,85 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the boot gate for the legion configuration: build its complete firmware set from this tree (hv, reset, OpenBoot and
+# both MDs, `make all TARGET=legion`), boot it under the DISTRIBUTION's QEMU to the OpenBoot `ok` prompt, and read OpenBoot
+# there: the banner, `.version`, the device tree (`show-devs`) and the properties of every node (`dev <path> .properties`).
+# The text is compared with expected/legion.obp, and cross-checked against the guest MD it came from (lib/obpcross.py: what the MD says
+# vs what OpenBoot shows; every guest-MD property, marked + shown / - not shown by OpenBoot, is in expected/legion.surface). Solaris is not booted. It also checks that QEMU loaded every firmware file from
+# the set just built (a stray blob in the cwd or another -L directory wins the search silently).
+#
+# What tests/full/md cannot say and this does: that hv, OpenBoot and the MD accept each other and what OpenBoot then presents to a
+# guest. A hypervisor that dies on a bad MD prints nothing at all.
+#
+# QEMU: qemu-system-sparc64 from the distribution package qemu-system-sparc (8.2.2 on noble), which is a requirement
+# (REQUIREMENTS.LINUX); tests/lib/qemu.sh. QEMU=<path> overrides (then the version is only printed, not vouched for). Only legion: the
+# pci configurations need our patched QEMU and are deliberately not tested here.
+#
+# Usage: run [--update]        --update rewrites expected/legion.obp (review the diff before committing)
+#        run selftest          feeds a hv MD without its channel_devices node and expects "no ok prompt" (the detector works)
+# Env:   OUTDIR (scratch), ATTEMPTS (default 3), TIMEOUT (s to the ok prompt, default 120), QEMU.
+# Exit:  0 passed; 1 content differs; 2 could not run, or no prompt after all attempts.
+set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); REPO=$(cd "$HERE/../../.." && pwd)
+MODE=${1:-run}; UPD=; [ "$MODE" = --update ] && { UPD=--update; MODE=run; }
+if [ -n "${OUTDIR:-}" ]; then OUT=$OUTDIR   # make passes one inside WORKDIR: kept for inspection, removed by make clean
+else OUT=$(mktemp -d "${TMPDIR:-/tmp}/boot-test.XXXXXX"); trap 'rc=$?; [ $rc = 0 ] && rm -rf "$OUT"; exit $rc' EXIT; fi
+mkdir -p "$OUT"
+
+. "$HERE/../../lib/qemu.sh"
+resolve_qemu
+[ -x "$Q" ] || { echo "cannot run: $Q not executable" >&2; exit 2; }
+print_qemu
+
+ZERO=$OUT/zero-1M.img; head -c 1048576 /dev/zero > "$ZERO"
+make -s -C "$REPO" all TARGET=legion TOOLCHAIN=gnu OUTDIR="$OUT/fw/legion" WORKDIR="$OUT/work/legion" > "$OUT/build-legion.log" 2>&1 \
+    || { echo "FAIL: firmware build failed, see $OUT/build-legion.log" >&2; exit 1; }
+FW=$OUT/fw/legion
+MEM=$(cut -d'|' -f4 "$FW/.md-signature")      # the set's MD_MEM: -m and the expected banner follow it
+QARGS=(-M niagara -accel tcg,thread=single -m "$MEM" -L "$FW" -drive if=pflash,file="$ZERO",format=raw,readonly=on)
+
+if [ "$MODE" = selftest ]; then
+  # A hv MD without channel_devices: res_guest.c asserts on it and the hypervisor stops before OpenBoot prints anything.
+  python3 "$HERE/../md/lib/mdunfold.py" "$FW/1up-hv.bin" | python3 -c '
+import sys,re
+t=sys.stdin.read()
+m=re.search(r"node channel_devices n(\d+) \{.*?\n\}\n\n?", t, re.S); assert m, "no channel_devices node"
+n=m.group(1); t=t.replace(m.group(0),"")
+t=re.sub(r"\n\tfwd -> n%s;"%n,"",t); sys.stdout.write(t)' > "$OUT/hv-broken.src"
+  MDGEN=$OUT/work/legion/mdtools/mdgen; [ -x "$MDGEN" ] || MDGEN=$(find "$OUT" -name mdgen -type f | head -1)
+  "$MDGEN" --binary --outfile "$OUT/1up-hv-broken.bin" "$OUT/hv-broken.src"
+  rm -rf "$OUT/fw/broken"; cp -r "$FW" "$OUT/fw/broken"; cp "$OUT/1up-hv-broken.bin" "$OUT/fw/broken/1up-hv.bin"
+  set +e
+  python3 "$HERE/lib/bootdrv.py" --name broken --outdir "$OUT" --fw "$OUT/fw/broken" --expect-banner "legion, ${MEM}MB" \
+      --snapshot "$HERE/expected/legion.obp" --attempts 1 --timeout 40 -- "$Q" "${QARGS[@]/$FW/$OUT/fw/broken}" 2> "$OUT/selftest.err"
+  rc=$?; set -e
+  if [ $rc = 2 ] && grep -q "no ok prompt" "$OUT/selftest.err"; then echo "ok  selftest 1/2: a hv MD without channel_devices is caught (no ok prompt)"
+  else echo "FAIL selftest: expected rc=2 'no ok prompt', got rc=$rc" >&2; cat "$OUT/selftest.err" >&2; exit 1; fi
+  # The MD/OpenBoot cross-check must notice when the MD and the OpenBoot text disagree: feed it a guest MD whose cpu clock, hostid
+  # and mblock size differ from the snapshot (taken from the good MD).
+  python3 "$HERE/../md/lib/mdunfold.py" "$FW/1up-md.bin" | python3 -c '
+import sys, re
+t = sys.stdin.read()
+t = re.sub(r"(node cpu n\d+ \{.*?clock-frequency = )0x4c4b40;", r"\g<1>0x4c4b41;", t, count=1, flags=re.S)
+t = t.replace("hostid = 0x80112233;", "hostid = 0x80112234;")
+t = re.sub(r"(node mblock n\d+ \{.*?size = )0x[0-9a-f]+;", r"\g<1>0x1000000;", t, count=1, flags=re.S)   # 16 MB: not the size of any set
+sys.stdout.write(t)' > "$OUT/md-bad.src"
+  "$MDGEN" --binary --outfile "$OUT/1up-md-bad.bin" "$OUT/md-bad.src"
+  set +e; python3 - "$OUT/1up-md-bad.bin" "$HERE" "$OUT" <<'PY'
+import sys, os
+sys.path.insert(0, os.path.join(sys.argv[2], 'lib')); import obpcross
+snap = open(os.path.join(sys.argv[2], 'expected', 'legion.obp')).read()
+banner = open(os.path.join(sys.argv[3], 'legion.console')).read().split('show-devs')[0] if os.path.exists(os.path.join(sys.argv[3], 'legion.console')) else ''
+fails, _ = obpcross.cross(sys.argv[1], snap, banner or 'Sun Fire T2000 [1up-md.bin: legion, 2048MB], No Keyboard\nOpenBoot 4.x, 2048 MB memory available, Serial #1122867.\nEthernet address 0:80:3:de:ad:3, Host ID: 80112233.')
+want = ['clock-frequency', 'Host ID', 'reg']
+missing = [w for w in want if not any(w in f for f in fails)]
+print('\n'.join('    caught: ' + f[:110] for f in fails))
+sys.exit(0 if not missing else 1)
+PY
+  rc2=$?
+  [ $rc2 = 0 ] && { echo "ok  selftest 2/2: the MD/OpenBoot cross-check catches a changed cpu clock, hostid and memory size"; exit 0; }
+  echo "FAIL selftest 2/2: the cross-check missed a deliberate disagreement" >&2; exit 1
+fi
+
+python3 "$HERE/lib/bootdrv.py" --name legion --outdir "$OUT" --fw "$FW" --expect-banner "legion, ${MEM}MB" \
+    --snapshot "$HERE/expected/legion.obp" --surface "$HERE/expected/legion.surface" ${UPD} --attempts "${ATTEMPTS:-3}" --timeout "${TIMEOUT:-120}" -- "$Q" "${QARGS[@]}"

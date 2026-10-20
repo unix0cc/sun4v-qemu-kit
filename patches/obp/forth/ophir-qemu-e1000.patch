@@ -1,0 +1,62 @@
+Support QEMU's e1000 (Intel 82540EM) alongside a real Ophir (82571).
+
+A dropin binding for device-id 0x100e -- no real Ophir reports that -- routes
+QEMU's e1000 to this driver. A `qemu-e1000?` predicate (config offset 0,
+device-id == 0x100e) then selects, per site, the behaviour QEMU's model needs
+without disturbing the 82571 path.
+
+reg-property-value: QEMU's 82540EM has a 32-bit memory BAR0 at 0x10 and a
+separate I/O BAR1 at 0x14, and Solaris e1000g needs that I/O BAR for an 82540
+or fails to attach ("Mapping registers failed"). Under qemu-e1000? the reg
+describes that layout; otherwise it stays the 82571's single 64-bit BAR0.
+
+Applied to the build tree, not src/obp -- but it no longer misdescribes a
+real 82571, so it could move into src/obp with a marker if wanted.
+
+--- a/obp/dev/network/ophir/load.fth	2026-09-08 22:10:18.555237252 +0200
++++ b/obp/dev/network/ophir/load.fth	2026-09-08 22:10:18.585237429 +0200
+@@ -50,9 +50,24 @@
+    >r encode-phys 0 encode-int encode+ r> encode-int encode+
+ ;
+ 
++: qemu-e1000?	( -- flag )
++   \ True for QEMU's e1000 model (Intel 82540EM, device-id 0x100e). No real
++   \ Ophir/82571 reports 0x100e, so this alone tells the two apart. Read
++   \ config offset 0 direct -- config-access.fth is not fload'ed yet here.
++   0 my-space or " config-l@" $call-parent  d# 16 rshift  h# 100e  =
++;
++
+ : reg-property-value	( -- adr len )
+    my-address my-space 0 encode-reg
+-   my-address my-space h# 300.0010 or h# 2.0000 encode-reg encode+
++   qemu-e1000? if
++      \ QEMU 82540EM: 32-bit memory BAR0 at 0x10, separate I/O BAR1 at 0x14.
++      \ Solaris e1000g requires that I/O BAR for an 82540 or fails to attach.
++      my-address my-space h# 200.0010 or h# 2.0000 encode-reg encode+
++      my-address my-space h# 100.0014 or h#      40 encode-reg encode+
++   else
++      \ Real 82571: one 64-bit memory BAR0 spanning 0x10 and 0x14.
++      my-address my-space h# 300.0010 or h# 2.0000 encode-reg encode+
++   then
+ ;
+ 
+ \ General Includes
+--- a/obp/arch/sun4v/niagara1-hw/release/dropins.src	2026-09-08 22:10:18.572237353 +0200
++++ b/obp/arch/sun4v/niagara1-hw/release/dropins.src	2026-09-08 22:10:42.247377024 +0200
+@@ -212,6 +212,16 @@
+    \ not used on plugin cards.
+    alias pciex8086,1060.8086.105e pciex8086,105e.108e.105e
+ 
++   \ QEMU's e1000 model: 8086:100e, an 82540EM. Not an Ophir, but it answers
++   \ the same register block -- bit-banged EEPROM at EEC, MDIC PHY access,
++   \ and the legacy descriptor rings -- and its PHY is a plain MII one, which
++   \ is all phy.fth asks for. The EEPROM warning above does not apply: under
++   \ QEMU the EEPROM is synthesised per boot from the -device macaddr, so
++   \ there is no card to brick.
++   : pci8086,100e.1af4.1100 ( -- )
++      " ophir" load-driver
++   ;
++
+ }source
+ 
+ # Serial ttya

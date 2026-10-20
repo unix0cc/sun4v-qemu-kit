@@ -1,0 +1,65 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Modified 2026 for sun4v-qemu-kit (see git log). Modifications Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file */
+/*
+* ========== Copyright Header Begin ==========================================
+* 
+* OpenSPARC T1 Processor File: common.pdesc
+* Copyright (c) 2006 Sun Microsystems, Inc.  All Rights Reserved.
+* DO NOT ALTER OR REMOVE COPYRIGHT NOTICES.
+* 
+* The above named program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public
+* License version 2 as published by the Free Software Foundation.
+* 
+* The above named program is distributed in the hope that it will be 
+* useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+* General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public
+* License along with this work; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
+* 
+* ========== Copyright Header End ============================================
+*/
+/*
+ * Copyright 2006 Sun Microsystems, Inc.  All rights reserved.
+ * Use is subject to license terms.
+ *
+ * ident	"@(#)common.pdesc	1.11	06/06/12 SMI"
+ */
+
+#define	VDEV_HANDLE 0x100
+/*
+ * T2-generation OBP aborts without mmu-max-#tsbs: "FATAL: Missing required
+ * property: mmu-max-#tsbs in node cpu". The older max-#tsb-entries is only a
+ * fallback in niagara/loadprom.fth and is not emitted. The value is 2, the
+ * limit of this hypervisor (MAX_NTSB, ontario/include/mmu.h); Solaris assumes
+ * at least 2 (Hypervisor API 8.19.3.1).
+ *
+ * Keep comments OUT of the macro body. A block comment eats the backslash
+ * continuations and mdgen reports "node definition expected".
+ */
+#define ADD_CPU(x) node cpu cpu/**/x {	\
+    id = x; 				\
+    clock-frequency = 0x4C4B40;		\
+    isalist = "sparcv9","sparcv8plus","sparcv8","sparcv8-fsmuld","sparcv7","sparc"; \
+    compatible = { "SUNW,UltraSPARC-T1", "SUNW,sun4v-cpu", "sun4v" }; \
+    mmu-max-#tsbs = 0x2; \
+    mmu-page-size-list = 0x2b; \
+    mmu-#va-bits = 0x40; \
+    back -> cpus; \
+    fwd -> cache; \
+    fwd -> tlb; \
+    }
+
+/*
+ * Everything below this file is macros and constants only -- the shape Sun's
+ * own xilinx configs use (one #include of a constants header, every node
+ * spelled out in the per-configuration file).
+ *
+ * The node definitions live in md/legion/1up.pdesc and md/pci/1up.pdesc, each
+ * complete and free of conditional compilation. The two overlap, deliberately:
+ * Sun's configs do the same, and duplication is cheaper to read than #ifdef in
+ * a shared file.
+ */

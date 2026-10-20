@@ -1,0 +1,153 @@
+Source code in this repository
+==============================
+
+Three different sets of terms apply, by path. See LICENSE at the repo root for
+the map of which path is which.
+
+
+src/hypervisor, src/obp -- BSD+ (Sun Microsystems)
+----------------------------------------------------
+The OpenSPARC T2 hypervisor and OpenBoot PROM sources, vendored per-file with
+Sun's own copyright headers intact (PRISTINE-MANIFEST records exactly what
+was imported and from where). Full text, copied verbatim from
+BSD+_License.txt in the OpenSPARCT2_Arch.1.2.tar.bz2 release archive:
+
+    Copyright (c) 2006 Sun Microsystems, Inc. All Rights Reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+     - Redistribution of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+     - Redistribution in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    Neither the name of Sun Microsystems, Inc. or the names of contributors
+    may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+    This software is provided "AS IS," without a warranty of any kind. ALL
+    EXPRESS OR IMPLIED CONDITIONS, REPRESENTATIONS AND WARRANTIES, INCLUDING
+    ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+    PURPOSE OR NON-INFRINGEMENT, ARE HEREBY EXCLUDED. SUN MICROSYSTEMS, INC.
+    ("SUN") AND ITS LICENSORS SHALL NOT BE LIABLE FOR ANY DAMAGES SUFFERED
+    BY LICENSEE AS A RESULT OF USING, MODIFYING OR DISTRIBUTING THIS
+    SOFTWARE OR ITS DERIVATIVES. IN NO EVENT WILL SUN OR ITS LICENSORS BE
+    LIABLE FOR ANY LOST REVENUE, PROFIT OR DATA, OR FOR DIRECT, INDIRECT,
+    SPECIAL, CONSEQUENTIAL, INCIDENTAL OR PUNITIVE DAMAGES, HOWEVER CAUSED
+    AND REGARDLESS OF THE THEORY OF LIABILITY, ARISING OUT OF THE USE OF OR
+    INABILITY TO USE THIS SOFTWARE, EVEN IF SUN HAS BEEN ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGES.
+
+    You acknowledge that this software is not designed, licensed or
+    intended for use in the design, construction, operation or maintenance
+    of any nuclear facility.
+
+
+Forth dictionaries (*.dic) -- Sun's BSD+ grant, by our reading
+--------------------------------------------------------------
+The seven prebuilt Forth dictionaries under src/obp:
+
+    obp/os/sun/sparc/{forth,forth32-xref,f32t32}.dic
+    obp/fm/kernel/sparc/{kernel-xref,k32t32-xref,k64t32}.dic
+    obp/pkg/tokenizr/sparc/tokenize.dic
+
+kernel-xref.dic is also what the bootstrap that avoids forth.dic starts from
+(forth_bootstrap/README). `make bootstrap-check` derives it from the sources in
+src/obp by Sun's metacompiler on cforth and compares it with this file; no
+copy of it is kept outside src/obp.
+
+All seven are binary and carry no header (LICENSE_SRC.MAP: none stated). We
+redistribute them under Sun's BSD+ grant, which says "source and binary
+forms": the OpenSPARC T2 release carries one licence text for it
+(BSD+_License.txt), and its BINARY_SLA.txt names other binaries (the SAM
+binaries in the directory legion, Solaris 10), not the obp directory. That is
+our reading, not a statement in the files. No file from the directory legion
+and no Solaris binary is in this tree. forth.dic is the root and has no
+source of its own; the other six are rebuilt from Forth source in src/obp on
+every build, starting from it, and the shipped copies are not read
+(build/obp/README).
+The chain is drawn in docs/obp-chain.png.
+
+
+CDDL in src/hypervisor/src/support/stabs/
+------------------------------------------
+Seven files there (asmcheck.c, forth.c, genassym.c, main.c, squander.c, stabs.c,
+stabs.h) carry Sun's BSD+ header and, after it, a CDDL 1.0 header
+(LICENSE_SRC.MAP: class BC). They build the `stabs` tool, which only the sun
+path runs (it makes offsets.h). The gnu path neither builds nor uses them, and
+no firmware file contains their code. Both headers are kept as they are; which
+of the two governs matters only to someone who changes these files, and does not
+touch the firmware. No other CDDL material is in the current tree.
+
+
+md/ machine descriptions -- GPL-2.0-only
+-----------------------------------------
+Everything under md/ that is a source of the MDs is GPL-2.0-only. The full
+text, copied verbatim from the release archive, is
+md/GPLv2_License_OpenSPARCT1.txt. 1up-md.bin and 1up-hv.bin are compiled from
+these files, so they are GPL-2 object code; their source is md/ at the commit
+that built them (the banner and the build stamp name it).
+
+Where the files come from:
+
+1. md/common.hdesc, md/common.pdesc, md/{legion,pci}/1up.pdesc
+   Sun's OpenSPARC T1 MD configurations (T1-archive: legion/src/config/niagara/
+   and hypervisor/src/greatlakes/ontario/t1_fpga/configs/). Unlike the BSD+
+   hypervisor and OpenBoot code they are GPL-2, and each file keeps Sun's
+   header saying so. Our changes are under the same terms: above Sun's header
+   each file has an SPDX line and a "Modified 2026" line with our copyright
+   (the AUTHORS file).
+
+2. Written here, following T2-archive files that name no licence
+   (header: "Use is subject to license terms"):
+     - md/{legion,pci}/1up.hdesc: written to what the hypervisor
+       reads, in the layout of
+       T2-archive:t1_fpga/src/xilinx/configs/*_hv.desc; six structural lines
+       are shared with Sun's T1 1up.hdesc. They are compiled together with the
+       GPL-2 md/common.hdesc into 1up-hv.bin;
+     - the iodevice and interrupt-map-entry nodes of md/pci: most property
+       lines of the iodevice node are those of
+       T2-archive:t1_fpga/src/xilinx/configs/1c1t_guest.desc.
+   The values are set by code: the hypervisor (BSD+), FWARC 2007/386, the
+   OpenBoot code and the OS px (PCIe) driver code, or the address map of QEMU
+   (md/README and md/REFERENCE give them value by value). We do not claim that
+   no value was taken from a Sun file.
+   These T2-archive files (t1_fpga/src/xilinx/configs/*_hv.desc and
+   1c1t_guest.desc) name no licence. Their header says "Use is subject to
+   license terms" and that they are derived from machine description binaries
+   in the OpenSPARC T2 legion simulation directory. What our files share with
+   them is what the hypervisor, the OS px (PCIe) driver, OpenBoot and the
+   public specifications (FWARC 2007/386, Hypervisor API) require: the names
+   of the nodes and properties and their values, written as "name = value;".
+   The comments, the macros and the structure of our files are ours.
+   So our files are GPL-2.0-only, each with an SPDX line and our copyright line,
+   and we hold that this is enough; these files give us no other terms to
+   follow.
+
+
+Everything else in this repository -- BSD-2-Clause, with one exception
+------------------------------------------------------------------------
+build/, patches/ (the patch text itself, as distinct from the BSD+ code it
+patches), scripts/, container/, tests/, forth_bootstrap/,
+build/hv_reset/gnu/abi/ (sys/stack.h, written here from the SPARC Compliance
+Definition 2.4.1), md/README, and the prose files (README,
+REQUIREMENTS.*, this file) are this project's own work, under the BSD
+2-Clause licence (LICENSE.BSD-2-Clause). Their holder is
+named in the AUTHORS file; scripts and makefiles carry a two-line header
+saying so (`make headers-check`). A patch merged in place into a BSD+ file
+takes the terms of that file.
+
+Exception: material from Sun inside that layer keeps Sun's BSD+ terms
+(BSD+_License_OpenSPARCT2.txt, copied verbatim from the OpenSPARC T2 release,
+OpenSPARCT2_Arch.1.2.tar.bz2); what this project added to it is BSD-2-Clause:
+
+    build/obp/gnu/obp-gnu-inner.mk         one rule copied from Sun's makefile
+    build/obp/gnu/openboot.ld              translation of Sun's linker mapfile
+    build/hv_reset/gnu/reference/          offsets generated from Sun's build
+
+The last two carry Sun's notice to be safe: openboot.ld in a header of its own, reference/ in reference/NOTICE (its two files
+are compared byte for byte with generated output, so they cannot hold one). obp-gnu-inner.mk names the rule it took from Sun in its header.

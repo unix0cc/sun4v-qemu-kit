@@ -1,0 +1,21 @@
+hv (sun path): drop Sun cc's debug stubs from the objects before the link.
+
+Sun cc writes a minimal DWARF unit into every object even without -g (source name, the build
+directory as DW_AT_comp_dir, the full cc command line, the producer). The link marks those
+.debug_* sections SHF_ALLOC, so `objcopy -O binary` keeps them and q.bin carries the build
+directory 16 times; Sun's own images (S10image) carry none. mcs(1) removes the sections from
+the relocatable objects (it cannot do it on the linked q: they sit in a loadable segment).
+The hypervisor does not read them. Sun path only; the gnu path does not apply this patch.
+
+Applied through the build's srcfix mechanism, never to the reference tree.
+
+--- a/greatlakes/ontario/Makefile.platform
++++ b/greatlakes/ontario/Makefile.platform
+@@ -180,6 +180,7 @@
+ 	@ls -l q.bin
+ 
+ q: chkasm $(OBJS) $(FAMILY_SRC)/mapfile.q
++	mcs -d -n .debug_info -n .debug_line -n .debug_abbrev $(OBJS)
+ 	$(LD) -o $@ -e start_master -dn -z defs -M $(FAMILY_SRC)/mapfile.q $(OBJS)
+ 	@size q
+ 

@@ -1,0 +1,31 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# login-sets -- boot every sun-built legion set to Solaris's `console login:` (the login gate of tests/full/login, once per set).
+#
+# Usage: login-sets DIR...        a DIR is a firmware set (reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin), or a directory with
+#                                 such a set in DIR/set. The set is named after DIR (the compiler that built it: sunstudio11, ...).
+#        make sun-login-verify SETS="DIR..."
+# A sun path build runs on Solaris, where there is no QEMU: take the built sets to a Linux host and run this there.
+# Needs GUEST_DISK=<image> (as tests/full/login/README); without it: skip, exit 3. Env: as tests/full/login/run (QEMU, ATTEMPTS, T_*).
+# One line per set, `ok  NAME  login prompt ...` or `FAIL NAME ...`. Exit: 0 all sets reach the login prompt; 1 a set did not; 2 usage.
+set -uo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+[ $# -gt 0 ] || { echo "usage: login-sets DIR..." >&2; exit 2; }
+if [ -z "${GUEST_DISK:-}" ] || [ ! -f "${GUEST_DISK:-}" ]; then
+  echo "skip  sun login gate: GUEST_DISK is not set to an existing image (see tests/full/login/README)"; exit 3
+fi
+OUT=${OUTDIR:-$(mktemp -d "${TMPDIR:-/tmp}/sun-login.XXXXXX")}; mkdir -p "$OUT"
+bad=0
+for d in "$@"; do
+  name=$(basename "$d"); fw=$d; [ -d "$d/set" ] && fw=$d/set
+  if [ ! -d "$fw" ]; then echo "FAIL $name: $fw is not a directory"; bad=1; continue; fi
+  log=$OUT/$name.log
+  OUTDIR=$OUT/$name "$HERE/../full/login/run" "$fw" > "$log" 2>&1; rc=$?
+  line=$(grep -E '^(ok|FAIL)' "$log" | tail -1)
+  case $rc in
+    0) echo "ok  $name  ${line#ok  legion }";;
+    *) bad=1; echo "FAIL $name: exit $rc ${line:+($line)}   log: $log";;
+  esac
+done
+exit $bad

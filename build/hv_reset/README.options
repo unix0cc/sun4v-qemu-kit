@@ -1,0 +1,81 @@
+hv build options -- what each -U/-D does and why
+===============================================
+
+The list is HV_OPTIONS in config.mk. options.mk renames it to
+QEMU_EXTRA_OPTIONS and hands it to whichever toolchain runs -- Sun's
+EXTRA_OPTIONS= or HV_EXTRA_OPTS= to gnu/hv-opts.sh -- once, not copied a
+second time. Override the whole list on the command line:
+
+    make hv_reset HV_OPTIONS='-UFOR_ZEUS -UCONFIG_LEGIONBCOPY ...'
+
+Every -U here except -UDEBUG_LEGION came from a live crash under QEMU,
+confirmed against the hv source. None was flipped on suspicion.
+
+
+-UFOR_ZEUS
+    reset.s reads membase/memsize/HVPD/HV from a table only Sun's Legion
+    simulator fills in. Left defined, the hv jumps to physical 0x20.
+
+-UCONFIG_LEGIONBCOPY
+    bcopy/xcopy become `ta 0x75`, a magic trap only Legion intercepts. Left
+    defined: MAXTL trap storm.
+
+-UDEBUG_LEGION
+    defines LEGION_MAGICTRAP_PABCOPY, used under CONFIG_LEGIONBCOPY above.
+    Inert on its own for this source set; cleared to match the validated
+    recipe.
+
+-URESETCONFIG_BROKENTICK
+    main.s reads JBUS registers (JBI_PERF_CTL, CLK_BASE/CLK_DIV_REG) to
+    calibrate %tick. QEMU models none of them.
+
+-UCONFIG_HVUART
+    Off by default; HV_UART=yes or ./configure --enable-hv-uart removes it.
+    puts()/uart_init() are the hv's own early debug console, polling an
+    NS16550 at FPGA_UART_BASE (0xfff0c2c000). Sun's legion variant defines
+    CONFIG_HVUART itself; it is this list that turns it off. Upstream QEMU has
+    no device there -- that address is unmapped in the niagara machine, not
+    even the sun4v-iob stub -- so puts()'s LSR-THRE poll can spin forever and
+    the hv hangs before its first character, with no diagnostic. The default
+    build targets upstream QEMU, so this is off.
+
+    To get the hv debug console back, build a QEMU that models the device
+    (the niagara-hvuart-console patch in
+    https://github.com/unix0cc/qemu-experimental-patches, devel/), build the
+    firmware with HV_UART=yes (make HV_UART=yes, or ./configure
+    --enable-hv-uart), and give QEMU a second -serial for it
+    (-serial mon:stdio -serial file:hv-console.log). A set built this way
+    hangs on a QEMU without the patch.
+
+
+Sun defaults left as they are, worth knowing about
+--------------------------------------------------
+-DNIAGARA_ERRATUM_39 and -DNIAGARA_ERRATUM_43 are not part of the override
+list above -- they come from Sun's own Makefile.platform
+($(DESUPPORT_NIAGARA_1x)PLAT_OPTIONS += ..., always on since
+DESUPPORT_NIAGARA_1x is commented out), unconditionally on for both
+toolchains. Listed here only because they explain a QEMU-side gap, not
+because this build sets them.
+
+    Erratum #39 (hcall_cpu.s, plat_halt_strand): guards against real
+    Niagara 1.x silicon, which could not reliably wake a halted strand on
+    an interrupt. Checks %hver's major field; on a part that looks like
+    1.x it skips the real halt write entirely rather than risk it. QEMU
+    never assigned %hver (always read 0 == "oldest possible part"), so this
+    guard always fired regardless of which CPU was actually modelled -- see
+    the niagara-strand-halt-erratum-39 patch in
+    https://github.com/unix0cc/qemu-experimental-patches, devel/.
+
+    Erratum #43 (traptable.h, VECINTR): unrelated to halt -- a membar #Sync
+    inserted before the vectored-interrupt trap reads ASI_INTR_UDB_R, to
+    avoid a different silicon bug (partial load hanging the thread right
+    after a Block_Init_Store).
+
+
+Not in the list, on purpose
+---------------------------
+-DT1_FPGA is NOT set. With it, scrub_all_memory (main.s:1483) compiles in a
+block that spreads memory-scrub work across strands and busy-waits on a
+per-strand bitmask that never clears under QEMU's max_cpus=1. Without it the
+block is gone and the strand broadcast is a plain bounded loop, so Sun's
+reset.s boots unpatched.

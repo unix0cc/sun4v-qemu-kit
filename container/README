@@ -1,0 +1,74 @@
+container/ -- build and test in a container (podman or docker)
+==============================================================
+
+Quick start (podman, from the top of this repository):
+
+    podman build -t sun4v-qemu-kit-build -f container/Containerfile container
+    podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build
+
+The first command builds the image once. The second runs `make all` in it; the
+result is ./output. Any other command goes at the end:
+
+    podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build \
+        make test-all
+    podman run --rm --userns=keep-id -v "$PWD":/src sun4v-qemu-kit-build \
+        make release
+
+docker: the same without --userns=keep-id, with --user "$(id -u):$(id -g)".
+
+What it is for: a host without the sparc64 cross toolchain, and building in a
+clean room. The image holds the toolchain only; the source tree is mounted, so
+the image does not change with the tree. Debian and Ubuntu bases only
+(REQUIREMENTS.LINUX: the rpm distributions have no sparc64 cross glibc).
+
+The login gate needs a guest image; without it that gate is skipped:
+
+    -v /path/to/images:/images:ro -e GUEST_DISK=/images/<image>
+
+`make bootstrap-check` needs the sparc binfmt_misc handlers; a container uses
+the host's.
+
+
+Other bases
+-----------
+One Containerfile, three bases. Ubuntu 24.04 is the default:
+
+    base          gcc  qemu-user
+    ------------  ---  ----------
+    Ubuntu 24.04  13   qemu 8.2.2
+    Debian 13     14   qemu 10.0
+    Ubuntu 26.04  15   qemu 10.2
+
+The others are build arguments:
+
+    podman build -t sun4v-qemu-kit-build-debian13 \
+        -f container/Containerfile container \
+        --build-arg BASE=docker.io/library/debian:stable --build-arg GCCV=14
+    podman build -t sun4v-qemu-kit-build-ubuntu2604 \
+        -f container/Containerfile container \
+        --build-arg BASE=docker.io/library/ubuntu:26.04 --build-arg GCCV=15 \
+        --build-arg QEMU_USER=qemu-user
+
+(26.04 has no qemu-user-static, hence QEMU_USER=qemu-user.) Then use the image
+name in the `podman run` lines above.
+
+
+Clean room
+----------
+container/clean-room.sh <image> [commit] [command...] makes a fresh clone of
+this repository at a commit (default HEAD, committed content only), mounts it
+as /src in a fresh container and opens a shell (or runs the command):
+
+    container/clean-room.sh sun4v-qemu-kit-build-debian13
+    container/clean-room.sh sun4v-qemu-kit-build-ubuntu2604 HEAD \
+        sh -c './configure && make all test-all release-check'
+    GUEST_DISK=/path/disk.s10hw2 container/clean-room.sh <image> HEAD \
+        sh -c './configure && make all test-all release-check'
+
+With no command: an interactive bash. GUEST_DISK is optional; without it the
+login gate is skipped.
+
+/log in the container is kept (under $CR, default
+/tmp/sun4v-clean-room/<image>/), for logs: `make all 2>&1 | tee /log/all.log`.
+Do not switch images in the same /src: build/toolchain-check.sh clears an
+OUTDIR built by other tools, but a new clean-room clone is the cleaner way.

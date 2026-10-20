@@ -1,0 +1,133 @@
+#!/bin/sh
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# The work directory must never cost anyone a file that is not ours (build/workdir.sh). Every case here builds its own
+# scratch tree under one mktemp directory, which is all that this test removes. No build, no QEMU, a second or two.
+#
+#   tests/full/workdir/run        or  make workdir-verify
+#
+# Run under sh (dash, bash, and the Bourne shell of Solaris 10: no $( ), no test -e, no `!`).
+HERE=`cd \`dirname "$0"\` && pwd`
+SRC=`cd "$HERE/../../.." && pwd`
+WD=$SRC/build/workdir.sh
+T=${TMPDIR:-/tmp}/workdir-test.$$
+mkdir "$T" || exit 2
+fail=0
+
+ok()   { echo "ok  $1"; }
+bad()  { echo "FAIL $1"; fail=1; }
+# expect STATUS DESCRIPTION CMD...   (the command's output is kept in $T/out)
+expect() {
+    want=$1; what=$2; shift; shift
+    "$@" > "$T/out" 2>&1; rc=$?
+    if [ "$rc" = "$want" ]; then ok "$what"; else bad "$what: exit $rc, wanted $want: `cat "$T/out"`"; fi
+}
+alive() { [ -f "$1" ] || [ -d "$1" ]; }
+gone()  { if alive "$1"; then bad "$2: $1 is still there"; else ok "$2"; fi; }
+kept()  { if alive "$1"; then ok "$2"; else bad "$2: $1 is gone"; fi; }
+
+mkdir "$T/src" "$T/out-d"
+touch "$T/src/Makefile"
+
+# --- path: deterministic, fixed length, TMPDIR and the override honoured
+a=`sh "$WD" path "$T/o1"`; b=`sh "$WD" path "$T/o1"`; c=`sh "$WD" path "$T/o2"`
+[ "$a" = "$b" ] && ok "path: the same OUTDIR gives the same work directory" || bad "path: not deterministic ($a, $b)"
+mkdir -p "$T/o1d/sub"
+sp=`sh "$WD" path "$T/o1d"`; allsame=1
+for s in "$T/o1d/" "$T//o1d" "$T/./o1d" "$T/o1d/sub/.." "$T/o1d/./"; do
+    [ "`sh "$WD" path "$s"`" = "$sp" ] || { allsame=0; echo "  differs: $s"; }
+done
+[ "$allsame" = 1 ] && ok "path: five spellings of one OUTDIR give one work directory" || bad "path: a spelling of the same OUTDIR gives another work directory"
+ln -s "$T/o1d" "$T/o1link"
+[ "`sh "$WD" path "$T/o1link"`" = "$sp" ] && ok "path: a link to OUTDIR gives its work directory" || bad "path: a link to OUTDIR gives another one"
+[ "$a" != "$c" ] && ok "path: another OUTDIR gives another one" || bad "path: two OUTDIRs share $a"
+la=`printf '%s' "$a" | awk '{ print length($0) }'`; lc=`printf '%s' "$c" | awk '{ print length($0) }'`
+[ "$la" = "$lc" ] && ok "path: the length does not depend on OUTDIR" || bad "path: lengths $la and $lc"
+# ten digits, a real base directory, and no clamped value (Solaris' awk printf %d stops at 2147483647 -- half of all sums are above it)
+seen=; n=0; clamped=0; short=0
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+    w=`sh "$WD" path "/some/where/out$i"`
+    case "$w" in /*/sun4v-qemu-kit.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) short=1; echo "  odd path: $w" ;; esac
+    case "$w" in *.2147483647) clamped=`expr $clamped + 1` ;; esac
+    seen="$seen $w"
+done
+[ "$short" = 0 ] && ok "path: /base/sun4v-qemu-kit.<10 digits> for 30 different OUTDIRs" || bad "path: some paths are not /base/sun4v-qemu-kit.<10 digits>"
+[ "$clamped" = 0 ] && ok "path: no sum is cut off at 2147483647" || bad "path: $clamped of 30 sums came out as 2147483647"
+nd=`for w in $seen; do echo "$w"; done | sort | uniq | wc -l | tr -d ' '`
+[ "$nd" = 30 ] && ok "path: 30 OUTDIRs, 30 different work directories" || bad "path: only $nd different work directories for 30 OUTDIRs"
+e2=`TMPDIR=/ sh "$WD" path "$T/o1"`
+case "$e2" in /var/tmp/sun4v-qemu-kit.*) ok "path: TMPDIR=/ falls back to /var/tmp" ;; *) bad "path: TMPDIR=/ gave $e2" ;; esac
+d=`TMPDIR=$T/tmp/ sh "$WD" path "$T/o1"`
+case "$d" in "$T/tmp/sun4v-qemu-kit."*) ok "path: TMPDIR is the base, a trailing slash is dropped" ;; *) bad "path: TMPDIR gave $d" ;; esac
+e=`sh "$WD" path "$T/o1" "$T/mine"`
+[ "$e" = "$T/mine" ] && ok "path: an explicit WORKDIR is used as it is" || bad "path: explicit gave $e"
+
+# --- make: creates a directory with the marker, and again (idempotent)
+W=$T/w1
+expect 0 "make: a new directory is created" sh "$WD" make "$W" "$T/src" "$T/out-d"
+kept "$W/.sun4v-qemu-kit-workdir" "make: the marker is in it"
+expect 0 "make: a second call is fine" sh "$WD" make "$W" "$T/src" "$T/out-d"
+
+# --- make: refusals
+# an existing directory with the marker is taken only if it is yours and nobody else can write to it
+chmod 775 "$W"; expect 1 "make refuses a marked directory that group can write to" sh "$WD" make "$W" "$T/src" "$T/out-d"
+chmod 757 "$W"; expect 1 "make refuses a marked directory that others can write to" sh "$WD" make "$W" "$T/src" "$T/out-d"
+chmod 700 "$W"; expect 0 "make takes it again once only you can write to it" sh "$WD" make "$W" "$T/src" "$T/out-d"
+if [ "`id | sed 's/^uid=\([0-9]*\).*/\1/'`" = 0 ]; then       # only root can hand a directory to somebody else
+    mkdir "$T/theirs"; touch "$T/theirs/.sun4v-qemu-kit-workdir"; chown 1 "$T/theirs"
+    expect 1 "make refuses a marked directory that is somebody else's" sh "$WD" make "$T/theirs" "$T/src" "$T/out-d"
+fi
+expect 1 "make refuses an empty WORKDIR" sh "$WD" make "" "$T/src" "$T/out-d"
+expect 1 "make refuses a relative WORKDIR" sh "$WD" make "relative/dir" "$T/src" "$T/out-d"
+expect 1 "make refuses /" sh "$WD" make / "$T/src" "$T/out-d"
+expect 1 "make refuses the home directory" sh "$WD" make "$HOME" "$T/src" "$T/out-d"
+expect 1 "make refuses the source tree" sh "$WD" make "$T/src" "$T/src" "$T/out-d"
+expect 1 "make refuses the parent of the source tree" sh "$WD" make "$T" "$T/src" "$T/out-d"
+expect 1 "make refuses OUTDIR" sh "$WD" make "$T/out-d" "$T/src" "$T/out-d"
+expect 1 "make refuses a directory inside OUTDIR" sh "$WD" make "$T/out-d/work" "$T/src" "$T/out-d"
+mkdir "$T/foreign"; touch "$T/foreign/notes"
+expect 1 "make refuses a non-empty directory it did not make" sh "$WD" make "$T/foreign" "$T/src" "$T/out-d"
+kept "$T/foreign/notes" "make leaves that directory alone"
+mkdir "$T/target"; touch "$T/target/keep"; ln -s "$T/target" "$T/link"
+expect 1 "make refuses a symbolic link" sh "$WD" make "$T/link" "$T/src" "$T/out-d"
+mkdir "$T/emptyd"; chmod 755 "$T/emptyd"
+expect 0 "make accepts an existing empty directory of yours" sh "$WD" make "$T/emptyd" "$T/src" "$T/out-d"
+
+# --- clean: removes only a marked directory
+mkdir -p "$W/sub/deeper"; touch "$W/sub/deeper/obj.o"
+expect 0 "clean: a marked directory" sh "$WD" clean "$W" "$T/src"
+gone "$W" "clean removed the marked directory and what is in it"
+expect 0 "clean: a directory that is not there" sh "$WD" clean "$T/not-there" "$T/src"
+expect 0 "clean: an empty argument" sh "$WD" clean "" "$T/src"
+expect 0 "clean: a foreign directory" sh "$WD" clean "$T/foreign" "$T/src"
+kept "$T/foreign/notes" "clean left the foreign directory alone"
+expect 0 "clean: a symbolic link" sh "$WD" clean "$T/link" "$T/src"
+kept "$T/target/keep" "clean did not follow the symbolic link"
+kept "$T/link" "clean left the link"
+expect 0 "clean: the source tree" sh "$WD" clean "$T/src" "$T/src"
+kept "$T/src/Makefile" "clean left the source tree"
+# a marker in the source tree or in the home directory does not make them removable
+touch "$T/src/.sun4v-qemu-kit-workdir"
+expect 0 "clean: the source tree, even with a marker in it" sh "$WD" clean "$T/src" "$T/src"
+kept "$T/src/Makefile" "clean still left the source tree"
+rm -f "$T/src/.sun4v-qemu-kit-workdir"
+mkdir "$T/fakehome"; touch "$T/fakehome/.sun4v-qemu-kit-workdir" "$T/fakehome/precious"
+expect 0 "clean: the home directory, even with a marker in it" env HOME="$T/fakehome" sh "$WD" clean "$T/fakehome" "$T/src"
+kept "$T/fakehome/precious" "clean left the home directory"
+
+# --- the whole thing through make: an OUTDIR next to a foreign WORKDIR must not touch it
+MK=make; if type gmake > /dev/null 2>&1; then MK=gmake; fi
+broken=0
+if [ -f "$SRC/config.auto.mk" ] && grep '^\$(error' "$SRC/config.auto.mk" > /dev/null 2>&1; then broken=1; fi
+if [ "$broken" = 1 ]; then
+    echo "skip make clean case: config.auto.mk records a failed ./configure (run it again)"
+elif [ -f "$SRC/Makefile" ] && $MK --version 2>&1 | grep GNU > /dev/null; then
+    mkdir "$T/f2"; touch "$T/f2/mine"
+    ( cd "$SRC" && $MK clean OUTDIR="$T/o3" WORKDIR="$T/f2" ) > "$T/out" 2>&1
+    kept "$T/f2/mine" "make clean with a foreign WORKDIR left it"
+    grep 'not removed' "$T/out" > /dev/null && ok "make clean said why" || bad "make clean was silent about a foreign WORKDIR: `cat "$T/out"`"
+fi
+
+rm -rf "$T"
+if [ "$fail" = 0 ]; then echo "workdir tests: all passed"; exit 0; fi
+echo "workdir tests: FAILED"; exit 1

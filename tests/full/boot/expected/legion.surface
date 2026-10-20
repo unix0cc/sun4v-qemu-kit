@@ -1,0 +1,49 @@
+- root                     content-version        '1.0'
+- root                     reset-reason           0x0
+- cpu                      id                     0x0
++ cpu                      clock-frequency        0x4c4b40
+- cpu                      isalist                ['sparcv9', 'sparcv8plus', 'sparcv8', 'sparcv8-fsmuld', 'sparcv7', 'sp
++ cpu                      compatible             ['SUNW,UltraSPARC-T1', 'SUNW,sun4v-cpu', 'sun4v']
+- cpu                      mmu-max-#tsbs          0x2
+- cpu                      mmu-page-size-list     0x2b
+- cpu                      mmu-#va-bits           0x40
++ mblock                   base                   0x80000000
++ mblock                   size                   0x80000000
++ virtual-device(disk)     name                   'disk'
++ virtual-device(disk)     compatible             ['SUNW,legion-disk']
+- virtual-device(disk)     ino                    0x0
++ virtual-device(disk)     cfg-handle             0x0
++ variables                fcode-debug?           'true'
++ variables                boot-device            'disk'
++ variables                input-device           'ttya'
++ variables                output-device          'ttya'
++ variables                auto-boot?             'false'
++ devalias                 disk                   '/virtual-devices/disk@0'
++ devalias                 vdisk                  '/virtual-devices/disk@0'
++ devalias                 nvram                  '/virtual-devices/nvram@5'
++ devalias                 ttya                   '/virtual-devices/console@1'
++ devalias                 ttyb                   '/virtual-devices/console@4'
++ devalias                 md-type                'legion'
++ platform                 banner-name            'Sun Fire T2000 [1up-md.bin: legion, 2048MB]'
+- platform                 name                   'SUNW,Sun-Fire-T2000'
++ platform                 mac-address            0x8003dead03
++ platform                 hostid                 0x80112233
+- platform                 serial#                0xab4130
+- platform                 stick-frequency        0x5f5e100
+- platform                 clock-frequency        0x4c4b40   [the value appears in the tree]
+- platform                 max-cpus               0x20
+- virtual-devices          name                   'virtual-devices'   [the value appears in the tree]
++ virtual-devices          device-type            'virtual-devices'
++ virtual-devices          compatible             ['SUNW,sun4v-virtual-devices']
++ virtual-devices          cfg-handle             0x100
++ virtual-device(console)  name                   'console'
+- virtual-device(console)  ino                    0x11
++ virtual-device(console)  compatible             ['qcn', 'SUNW,sun4v-console']
++ virtual-device(console)  cfg-handle             0x1
++ virtual-device(nvram)    name                   'nvram'
+- virtual-device(nvram)    ino                    0x0
++ virtual-device(nvram)    cfg-handle             0x2
++ virtual-device(rtc)      name                   'rtc'
+- virtual-device(rtc)      ino                    0x0
++ virtual-device(rtc)      cfg-handle             0x3
++ virtual-device(rtc)      compatible             'sun4v-tod'

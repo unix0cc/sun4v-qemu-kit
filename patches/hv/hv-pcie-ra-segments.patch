@@ -1,0 +1,92 @@
+hv: map the guest PCIe range as device I/O.
+
+The device-I/O address tier is never set up: res_guest.c doesn't assign the
+PCIe range (upstream only does under CONFIG_PCIE), and segments.h's
+RANGE_CHECK_IO compiles to a branch-to-fail without it. res_guest.c assigns
+the range as IO_SEGMENT in init_guest(); the RANGE_CHECK_IO guard is forced
+to #if 1.
+
+Applied through the build's srcfix mechanism, never to the reference tree.
+
+How wide it is, and where it differs from Sun's code:
+  * 0xc000000000 .. 0xff00000000 (252 GB) is Sun's own leaf B aperture
+    (AID_TO_PCIE_LEAF_B_BASE/LIMIT, the CONFIG_IOBYPASS arm of res_fire_pcie.c),
+    not a range chosen here. The guest MD of the pci set declares 256 MB of I/O
+    (0xc810000000), about 2 GB of MEM32 (0xca00000000) and about 16 GB of MEM64
+    (0xcc00000000): roughly 18 GB, 7% of it. The rest is mapped as I/O too.
+  * Sun assigns it from config_a_guest_pcie_bus(), only to a guest that was
+    given a PCIe leaf. That code is under CONFIG_PCIE and is not built here, so
+    this patch assigns the range to every guest in init_guest(), the legion set
+    (no PCIe node in its MD) included.
+  * A guest real address inside the range but outside the MD windows is accepted
+    by the hypervisor and reaches QEMU, which answers for it; with Sun's own
+    gating, or with only the MD windows, the hypervisor would refuse it instead.
+    Narrowing needs the windows from the MD at init_guest() time, which this
+    build cannot read without the CONFIG_PCIE code; it has not been done.
+
+--- a/common/src/res_guest.c
++++ b/common/src/res_guest.c
+@@ -118,6 +118,44 @@
+ 		init_ra2pa_segment(&(gp->ra2pa_segment[j]));
+ 	}
+ 
++	/*
++	 * LOCAL DEVIATION (not Sun's source) -- QEMU sun4v PCIe.
++	 *
++	 * A guest real address is only accepted if it falls in a segment of
++	 * this table; anything else makes the TLB miss handler hand the guest
++	 * a data access exception. Memory segments come from the mblocks. The
++	 * PCIe I/O range is assigned in exactly one place upstream --
++	 * greatlakes/ontario/src/res_fire_pcie.c, under CONFIG_PCIE -- so a
++	 * build without it cannot reach device registers at all: Solaris'
++	 * e1000g dies on its first register write, in e1000_reset_hw.
++	 *
++	 * Enabling CONFIG_PCIE is not an option here. It also requires
++	 * CONFIG_FIRE (FIRE_LEAF lives under it, platform/vdev_ops.h:91) and
++	 * so drags in the Fire root complex driver, which programs registers
++	 * QEMU does not model -- and four of the assembly files it needs do
++	 * not build with GNU as at all (cpu_errs.s alone has 159 rejected
++	 * sites).
++	 *
++	 * So assign the range directly, and only the range. The bounds are
++	 * Sun's own: AID_TO_PCIE_LEAF_B_BASE/LIMIT from the CONFIG_IOBYPASS
++	 * arm of res_fire_pcie.c, which is the arm whose addresses match what
++	 * this machine's guest MD describes (0xc810000000 I/O, 0xca00000000
++	 * MEM32, 0xcc00000000 MEM64). The offset is zero: on this machine a
++	 * guest's real addresses equal physical ones.
++	 *
++	 * What this does NOT do is any part of Fire's own setup -- no MSI EQ
++	 * base, no bypass configuration, no error handling. Those live in the
++	 * hypercalls QEMU answers itself.
++	 *
++	 * The flag is IO_SEGMENT, as Sun's own code uses. Setting MEM_SEGMENT
++	 * here instead was tried and stops the hypervisor booting entirely.
++	 * The reason the miss path still refuses such a segment is a test in
++	 * segments.h that looks at MEM_SEGMENT alone; that test is widened in
++	 * override/segments.h, which is where the change belongs.
++	 */
++	assign_ra2pa_segments(gp, 0xc000000000ull,
++	    0xff00000000ull - 0xc000000000ull, 0, IO_SEGMENT);
++
+ 	asmsg = (hvctl_msg_t *)gp->async_buf;
+ 	asmsg->hdr.op = HVctl_op_new_res_stat;
+ 
+--- a/common/include/segments.h
++++ b/common/include/segments.h
+@@ -268,7 +268,15 @@
+ 	.poplocals
+ /* END CSTYLED */
+ 
+-#ifdef CONFIG_PCIE
++/*
++ * LOCAL OVERRIDE (not Sun's source): was #ifdef CONFIG_PCIE. Without it
++ * RANGE_CHECK_IO compiles to an unconditional branch to the fail label,
++ * which silently deletes the I/O tier of rdmmu_miss (mmu.s:92), dmmu_miss
++ * (:587) and hcall_mmu_map_addr (hcall_mmu.s:513) -- the three places a
++ * guest real address in an IO segment is supposed to be accepted. Those
++ * files compile regardless of CONFIG_PCIE; only this macro vanished.
++ */
++#if 1  /* was: #ifdef CONFIG_PCIE */
+ 
+ /*
+  * Note: Could just use RA2PA_RANGE_CONV_UNK_SIZE() macro, but that would

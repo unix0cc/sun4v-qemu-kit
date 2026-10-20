@@ -1,0 +1,138 @@
+Running the firmware under QEMU
+================================
+
+sun4v-qemu-kit builds firmware for QEMU niagara, an emulated OpenSPARC T1.
+Also see REQUIREMENTS.LINUX and REQUIREMENTS.SOLARIS.
+
+
+Quick start
+-----------
+    git clone https://github.com/unix0cc/sun4v-qemu-kit
+    cd sun4v-qemu-kit
+    ./configure                 # optional, see README.configure in the repository
+    make all                    # saves to ./output; on Solaris: `gmake`
+ or
+    make all OUTDIR=$HOME/fw    # saves to $HOME/fw (give it to -L)
+
+This builds the default configuration, legion [TARGET=legion], and ends by
+printing the command that starts QEMU with it. No disk is needed; you get the
+OpenBoot `ok` prompt:
+
+    qemu-system-sparc64 -M niagara -m 2048 -L ./output -nographic \
+        -serial mon:stdio
+
+To boot the Solaris 10 image based on Legion, from the OpenSPARC T1 archive,
+add the Legion disk (the simulated disk of Sun's Legion simulator for
+OpenSPARC):
+http://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2
+The file is S10image/disk.s10hw2 in the unpacked archive (here it is unpacked
+to $HOME/T1). Then type `boot disk` at the prompt:
+
+    qemu-system-sparc64 -M niagara -m 2048 -L ./output -nographic \
+        -serial mon:stdio \
+        -drive if=pflash,file=$HOME/T1/S10image/disk.s10hw2,format=raw
+
+    ok boot disk
+
+Solaris boots to `console login:`.
+
+The WARNING lines and "virtual-console not found." printed at the start are
+normal.
+
+To boot the Solaris 10 1/13 DVD image instead up to ramdisk, see README.S10U11.
+
+To keep the set somewhere permanent, install it (this copies the built set, it
+does not build):
+
+    ./configure --prefix=$HOME/fw    # default /usr/local, needs root
+    make all && make install         # on Solaris: `gmake`
+
+`make install` prints the QEMU command for the installed set. More in
+"Installing a built set" below.
+
+
+Rules
+-----
+- `-m` must equal MD_MEM (2048 for legion, 4096 for pci; RELEASE-INFO lists the
+  value of each set).
+- Console: use `-nographic -serial mon:stdio`. For a console log file, replace
+  `-serial mon:stdio` with:
+
+      -chardev stdio,id=char0,mux=on,signal=off,logfile=<console.log>,\
+logappend=on \
+      -serial chardev:char0 -mon chardev=char0,mode=readline
+
+
+legion (the default)
+--------------------
+The default configuration: `make all`, same as `make all TARGET=legion`.
+Legion is Sun's software simulator for OpenSPARC; this configuration presents
+the same machine: virtual devices only (a console and an RTC) and one
+simulated disk, available via the QEMU pflash interface (the first if=pflash
+drive).
+Solaris reaches it through the hsimd driver, which stock Solaris images do
+not have.
+
+disk.s10hw2 is a Solaris 10 guest with the hsimd driver. The drive is a RAM
+copy of the image: writes never reach the file, every boot starts clean, and
+its size is added on top of -m.
+
+Solaris reaches its login prompt on unmodified QEMU 8.2.2 up to MD_MEM=2048.
+Above that it needs a QEMU with 256M page size support (see
+md/legion/README, which also has the full device list).
+
+The Solaris 10 1/13 DVD image also boots, up to its miniroot: README.S10U11.
+
+
+pci
+---
+Build it with `make all TARGET=pci`. It runs on a QEMU with the
+experimental vpci patches, which are not in upstream, so it does not run on a
+stock one. See md/pci/README.
+
+
+What QEMU loads from -L (and how to check it)
+---------------------------------------------
+qemu-system-sparc64 -M niagara loads six files from the -L directory:
+
+    reset.bin  q.bin  openboot.bin  1up-hv.bin  1up-md.bin  nvram1
+
+Point -L at the directory with all six (./output after `make all`,
+<dir>/<target> in a release). They must come from one build: do not mix files
+of two builds.
+
+To see which files QEMU loaded and from where, add -trace load_file. QEMU looks
+in the current directory before -L, so a stray openboot.bin there silently
+wins:
+
+    qemu-system-sparc64 -M niagara -m 2048 -L ./output -nographic \
+        -serial mon:stdio -trace load_file
+
+QEMU prints one line per file before OpenBoot starts; all six should point
+into the -L directory:
+
+    load_file name nvram1 location ./output/nvram1
+    ...
+    load_file name openboot.bin location ./output/openboot.bin
+
+
+If something goes wrong
+-----------------------
+  Symptom                         What to do
+  ------------------------------  ----------------------------------------------
+  Nothing is printed              The files come from two builds, or one is
+                                  missing: see "What QEMU loads from -L" above.
+  qemu: fatal: Trap 0x0032 ...    -m is smaller than MD_MEM; make them equal.
+  MAXTL (6), before any output
+  `boot disk` faults              The drive must be if=pflash (legion).
+  Solaris panics in               legion above 2048 MB needs a QEMU with 256M
+  unix:startup_vm                 page size support (md/legion/README).
+
+
+Installing a built set
+----------------------
+`make install` copies the six files of a built set (it does not build) to
+$(prefix)/share/sun4v-qemu-kit/<TARGET>/, default prefix /usr/local; -L is
+then that directory. DESTDIR stages the install for a package, TARGET=all
+installs every configuration, `make uninstall` removes what was installed.
+The build itself writes to OUTDIR, not to the prefix.

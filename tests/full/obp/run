@@ -1,0 +1,59 @@
+#!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
+# run -- the internal OBP test gate: every claim in TESTS that needs no
+# tarball, no network, no Solaris host -- only this repository and the GNU
+# cross toolchain. Stops at the first failure (a later test's claim rests
+# on an earlier one: patch-locality and sun-records both assume the
+# dictionary chain in dic-kernels/dic-host/dic-fixpoint already bootstraps
+# correctly, so running them past a bootstrap failure would just repeat it
+# under a different name).
+#
+# Order:
+#   0. src-intact       the working tree matches PRISTINE-MANIFEST
+#   1. dic-kernels       the kernel dictionaries reproduce Sun's shipped ones
+#      dic-fixpoint       a second generation from our own root reproduces itself
+#      dic-host           the host dictionaries reconcile against Sun's shipped ones
+#   2. sun-records        two pristine builds reproduce Sun's own shipped images
+#      patch-locality     the product build's patches change only what they should
+#      dict-content       the product's word list matches (regression, see its header)
+#
+# `external/` is not run by this script: it needs OpenSPARCT2_Arch.1.2.tar.bz2
+# (OPENSPARC_T2=<path>, or it is found at the usual reference location) and
+# is how the expected/*.sha256 files this script reads get regenerated and
+# reviewed after a src/obp change -- see tests/full/obp/README.
+#
+# Usage: run [test-name ...]      (default: every internal test, in order)
+# Env:   QEMU_SPARC32, QEMU_SPARC64 (both required); OUTDIR (default: one
+#        shared scratch dir for the whole run, so the pci build the first
+#        few tests need is built once, not four times -- build-pci.sh).
+set -euo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+: "${QEMU_SPARC32:?set QEMU_SPARC32 to a qemu-sparc32plus linux-user binary}"
+: "${QEMU_SPARC64:?set QEMU_SPARC64 to a qemu-sparc64 linux-user binary}"
+export QEMU_SPARC32 QEMU_SPARC64
+export OUTDIR=${OUTDIR:-$(mktemp -d "${TMPDIR:-/tmp}/obp-test.XXXXXX")}
+mkdir -p "$OUTDIR"
+
+ORDER="src-intact dic-kernels dic-fixpoint dic-host sun-records patch-locality dict-content"
+WANT="${*:-$ORDER}"
+
+t0=$(date +%s)
+for name in $WANT; do
+    script="$HERE/internal/$name.sh"
+    [ -x "$script" ] || { echo "run: no such internal test '$name' ($script)" >&2; exit 2; }
+    echo
+    echo "############################################################"
+    echo "# $name"
+    echo "############################################################"
+    s=$(date +%s)
+    if "$script"; then
+        echo "-- $name: $(( $(date +%s) - s ))s"
+    else
+        echo
+        echo "=== run: FAILED at $name (scratch: $OUTDIR) ==="
+        exit 1
+    fi
+done
+echo
+echo "=== run: PASS -- $(echo "$WANT" | wc -w) internal tests, $(( $(date +%s) - t0 ))s total ==="

@@ -1,0 +1,93 @@
+md -- guest and hypervisor machine descriptions
+===============================================
+
+    make md                 legion
+    make md TARGET=pci   pci
+    make md TARGET=all   both, one after the other
+
+Output: $(OUTDIR)/1up-md.bin (guest) and 1up-hv.bin (hypervisor). With
+TARGET=all each config goes to its own $(OUTDIR)/<target>/ instead.
+
+Layout
+------
+    md/common.pdesc, common.hdesc   macros and constants only
+    md/legion/1up.{pdesc,hdesc}     the legion machine, complete
+                                    (+ config.mk, README)
+    md/pci/1up.{pdesc,hdesc}        the pci machine, complete
+                                    (+ config.mk, README)
+
+Each machine directory has its own README (device list, matching QEMU command
+line, what is known to boot) and its own config.mk (the OBP target and the
+MD_LEGION_IO/MD_PCI flags used by `make config` and the rebuild stamp).
+
+Each variant is self-contained, with no conditional compilation. The two
+overlap on purpose, the same way Sun's own configs do. The cost: a change
+meant for both machines has to be made twice.
+
+TARGET is the directory name. config.mk discovers valid names by wildcard
+(any md/<target>/ with a 1up.pdesc) rather than listing them, and -include's
+that name's config.mk for the coupling -- so config.mk itself never names a
+config, and adding one is just adding a directory: 1up.pdesc, 1up.hdesc,
+config.mk, README. No top-level file needs editing.
+
+"all" is not a directory: it is a request to build every discovered
+md/<target>/ in one pass, each into its own $(OUTDIR)/<target> by re-invoking
+make.
+
+What OBP takes from here
+------------------------
+OBP's configuration comes from this MD, not from NVRAM. These nodes are the
+only place to change it:
+
+    node variables    boot-device, input-device, output-device, auto-boot?,
+                      fcode-debug?
+    node devalias     the table `devalias` prints at ok
+
+pci aliases:
+
+    net    /pci@0/network@0                     e1000 (Ophir FCode)
+    disk   /pci@0/ide@2/disk@0                   cmd646 IDE, primary master
+    disk0  /pci@0/ide@2/disk@0                   same unit
+    cdrom  /pci@0/ide@2/cdrom@1,0                cmd646 IDE, primary slave
+
+legion aliases:
+
+    disk   /virtual-devices/disk@0              the Legion disk
+    vdisk  /virtual-devices/disk@0              same device
+
+Both also carry nvram, ttya, ttyb, and md-type -- a label naming the variant,
+which `devalias` prints.
+
+Where the hypervisor MD's values come from
+------------------------------------------
+Names used below: T1-archive is OpenSPARCT1_Arch.1.5.tar.bz2, T2-archive is
+OpenSPARCT2_Arch.1.2.tar.bz2 (md/REFERENCE, Sources).
+
+md/*/1up.hdesc is written to what the hypervisor reads; the sources are in
+src/hypervisor/src (BSD+). The layout is that of the MD sources in T2-archive
+(t1_fpga/src/xilinx/configs/*_hv.desc; no licence named for them). Of the 22
+properties of the legion hypervisor MD, 11 have the same value there (pci: 13
+of 24).
+
+md/REFERENCE lists every node and property of the hypervisor MD: its value,
+what reads it (file:line), and whether and how the two archives have it. The
+same is written value by value in the comments of md/*/1up.hdesc.
+
+No specification describes this MD. FWARC/2005/115 and the Hypervisor API
+(8.23) describe the guest MD (there content-version is the string "1", and
+cfg-handle of virtual-devices and channel-devices is only "a unique 64-bit
+value"); FWARC/2006/700 and 2007/138 describe the PRI. The first-hand sources
+for this file are the hypervisor's own code.
+
+Editing
+-------
+Two limits are worth knowing before you add anything.
+
+The guest MD must stay under 8 KB. QEMU loads it into a fixed-size ROM with no
+bounds check, so a larger file is truncated and the machine boots to nothing at
+all, with no message.
+
+A PCI device that raises INTB, INTC or INTD needs its own interrupt-map-entry.
+There is no fallback and no warning if one is missing -- the device's driver
+just times out. The node format is FWARC 2007/386,
+https://sun4v.github.io/ARChive/FWARC/2007/386/

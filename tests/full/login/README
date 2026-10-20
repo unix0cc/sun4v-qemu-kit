@@ -1,0 +1,50 @@
+tests/full/login -- the login gate (legion, Solaris level)
+==========================================================
+
+    GUEST_DISK=<image> make login-verify
+    GUEST_DISK=<image> tests/full/login/run [FWDIR]
+                                about a minute
+    tests/full/login/run selftest
+                                prove the detector on an empty disk (no image
+                                needed)
+
+What it does: boots legion's firmware set under QEMU, types `boot disk` at the
+OpenBoot prompt and requires Solaris's `console login:`. The boot gate
+(tests/full/boot) stops at the prompt and nothing else runs the guest kernel;
+this is the gate that does. The set is built from this tree
+(`make all TARGET=legion`), or taken as it is from FWDIR (for instance the
+`legion` directory of an unpacked release: then it checks the released bytes).
+-m follows the set (`.md-signature`, else the `memory` line of RELEASE-INFO
+beside it, else 2048). It also checks that QEMU loaded all six firmware files
+from that set.
+
+The guest disk is not part of this repository: GUEST_DISK is a Solaris 10 disk
+image with the hsimd driver for Legion's simulated disk. The OpenSPARC T1
+archive has one, S10image/disk.s10hw2; about its hsimd driver see
+https://github.com/artyom-tarasenko/hsimd
+Without it the gate is skipped (exit 3), and `make test-full` includes it only
+when GUEST_DISK is set. QEMU is the distribution package, as for the other
+gates (tests/lib/qemu.sh); the disk is attached read-only (the niagara machine
+maps it as RAM, writes never reach the file).
+
+Classification of the console, by the earliest marker:
+  `console login:`           pass
+  `panic[cpuN]`              fail, the panic line is printed
+  `Last Trap: Level 14`      OpenBoot's loader flake (disk path: 0 of 100
+                             boots on each of three QEMUs); retried (ATTEMPTS,
+                             default 3), reported with a warning if a later
+                             attempt passes
+  any other OpenBoot trap    fail
+  the OpenBoot prompt back
+  after `boot disk`          fail ("did not boot")
+  no new console output for T_STALL seconds (240), or no login within
+  T_LOGIN (300)              fail
+
+Exit: 0 login; 1 the guest did not get there; 2 could not run, no ok prompt,
+or the Level 14 flake on every attempt; 3 skipped.
+Env: GUEST_DISK, QEMU, OUTDIR (the console log is OUTDIR/legion.console),
+ATTEMPTS, T_OK (120), T_LOGIN (300), T_STALL (240), BOOT_CMD.
+
+Not covered: the pci configuration (it needs our patched QEMU), more than login
+(no commands are run in the guest), RAM sizes above what stock QEMU boots with
+this disk (legion's default 2048 is the limit, RELEASE-INFO).
