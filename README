@@ -24,6 +24,7 @@ Where to read what
     README.S10U11        the Solaris 10 1/13 DVD image
     LICENSE, LICENSE_CODE, LICENSE_SRC.MAP
                          the licences, and which file is under which
+    CREDITS              whose work this is built on
 
 
 Built from the Sun/Oracle OpenSPARC T2 source release (the distribution

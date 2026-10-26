@@ -21,7 +21,8 @@ from that set.
 The guest disk is not part of this repository: GUEST_DISK is a Solaris 10 disk
 image with the hsimd driver for Legion's simulated disk. The OpenSPARC T1
 archive has one, S10image/disk.s10hw2; about its hsimd driver see
-https://github.com/artyom-tarasenko/hsimd
+Sun's OpenSPARC T2 legion/src/support/hsimd (a standalone copy:
+https://github.com/artyom-tarasenko/hsimd)
 Without it the gate is skipped (exit 3), and `make test-full` includes it only
 when GUEST_DISK is set. QEMU is the distribution package, as for the other
 gates (tests/lib/qemu.sh); the disk is attached read-only (the niagara machine

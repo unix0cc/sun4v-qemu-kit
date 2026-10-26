@@ -2,8 +2,10 @@ md/legion -- the no-PCI machine
 ===============================
 
 The only machine that reaches the OpenBoot ok prompt on unmodified upstream
-QEMU. Its disk is Sun's Legion simulator disk, driven by hsimd
-(https://github.com/artyom-tarasenko/hsimd).
+QEMU. Its disk is Sun's Legion simulator disk, driven by Sun's hsimd driver
+(OpenSPARC T2, legion/src/support/hsimd, GPL-2). A standalone copy of those
+files, byte-identical to Sun's, is at
+https://github.com/artyom-tarasenko/hsimd
 
     make md  TARGET=legion        # default TARGET
     make all TARGET=legion        # obp niagara/t1_fpga, hv ontario/legion

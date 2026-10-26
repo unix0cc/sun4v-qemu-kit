@@ -1,0 +1,66 @@
+CREDITS
+=======
+
+This kit is built on the work of others. The licences are in LICENSE,
+LICENSE_CODE and LICENSE_SRC.MAP; the authors of the kit's own layer are in
+AUTHORS.
+
+Sun Microsystems / Oracle
+-------------------------
+The OpenSPARC T1 and T2 source release: the hypervisor and OpenBoot in
+src/, kept as published in OpenSPARCT2_Arch.1.2.tar.bz2 file
+(PRISTINE-MANIFEST says what was removed).
+
+OpenSPARC T1:
+    https://www.oracle.com/servers/technologies/opensparc-t1-page.html
+
+OpenSPARC T2:
+    https://www.oracle.com/servers/technologies/opensparc-t2-page.html
+
+T2 archive, the source of src/:
+    https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT2_Arch.1.2.tar.bz2
+
+T1 archive, with the Solaris 10 Legion disk image (S10image/disk.s10hw2):
+    https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2
+    (hashes of both archives: tests/full/md/expected/sun-archives.sha256)
+
+Project Q (sun4v), Sun's architecture specifications and FWARC list:
+    https://sun4v.github.io/
+    (the archive of the closed Kenai.com site)
+
+Artyom Tarasenko
+----------------
+The niagara machine in QEMU (-M niagara, hw/sparc64/niagara.c), which every
+machine here runs on.
+
+qemu-sun4v-md, a ready-made 1 GiB MD and firmware set for -M niagara:
+    https://github.com/artyom-tarasenko/qemu-sun4v-md/tree/1GiB-experimental
+    (directory 1GiB-snv_77, an independent reference for the MDs here)
+
+hsimd, Sun's driver files published unchanged as a repository:
+    https://github.com/artyom-tarasenko/hsimd
+
+illumos (the open source descendant of OpenSolaris)
+---------------------------------------------------
+The OpenSolaris code on which illumos is based is the only guaranteed,
+confirmed way to validate that the components of sun4v-qemu-kit work.
+
+illumos-gate:
+    https://github.com/illumos/illumos-gate
+
+SPARC Compliance Definition 2.4.1 (SPARC International, 1999), section 3P-8,
+the stack frame that stack.h implements:
+    https://sparc.org/wp-content/uploads/2014/01/SCD.2.4.1.pdf.gz
+
+Mitch Bradley (FirmWorks)
+-------------------------
+cforth, the C-rooted Forth (MIT licence) that lets the OpenBoot Forth
+sources be built with no prebuilt dictionary in the tree. It is fetched at
+a pinned commit, not stored here: forth_bootstrap/README.
+
+cforth:
+    https://github.com/MitchBradley/cforth
+
+The QEMU project
+----------------
+QEMU is used as it is, the distribution package (tests/lib/qemu.sh).
