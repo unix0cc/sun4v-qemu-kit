@@ -33,7 +33,7 @@ and what we ran (every Studio of build_matrix, section 5):
   cc(1) on the machine says the same. `stabs` is ignored with a warning. The
   old rule yields an empty offsets.h ("Can't find md_header ...") and
   traptable.s no longer assembles.
-- gcc: no `-gstabs` since GCC 12.
+- gcc: no `-gstabs` since GCC 13 (deprecated in 12).
 
 So the break is at 12.6. 12.5 and 12.6 need VIS declared on the guest to
 start. 12.2 and later need `-xbuiltin=%none` (their -fast output calls

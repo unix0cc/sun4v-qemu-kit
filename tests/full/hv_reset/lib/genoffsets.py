@@ -12,7 +12,7 @@ Sun's build does:
     stabs -t genassym -m lp64 offsets.tmp < offsets-n1.s > offsets.h
 
 i.e. it compiles a stub to *stabs* debug format and mines struct layout out of
-it.  Modern gcc cannot do that -- -gstabs was removed in GCC 12 -- so instead of
+it.  Modern gcc cannot do that -- -gstabs was removed in GCC 13 -- so instead of
 reading debug info we make the compiler compute the values for us, the classic
 genassym trick used by Linux and the BSDs: emit an inline-asm marker whose
 operand is a compile-time constant, then read the markers back out of the
