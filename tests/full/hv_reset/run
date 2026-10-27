@@ -19,7 +19,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export OUTDIR=${OUTDIR:-$(mktemp -d "${TMPDIR:-/tmp}/hv-test.XXXXXX")}
 mkdir -p "$OUTDIR"
 
-ORDER="no-asm-warnings setx-rd-pc offsets-cross-check"
+ORDER="no-asm-warnings setx-rd-pc offsets-cross-check aschk"
 WANT="${*:-$ORDER}"
 
 t0=$(date +%s)

@@ -194,7 +194,7 @@ $(OUTDIR)/reset.bin: FORCE
 	@# Start from nothing, as the sun branch does: build.sh keeps an offsets.h it finds, and an .o left by an earlier run
 	@# (other HV_OPTIONS, or one that failed to compile now) would be linked without a word.
 	rm -rf $(HV_WORK)
-	PLATFORM="$(PLATFORM)" VARIANT="$(VARIANT)" sh build/hv_reset/gnu/build.sh $(HV_WORK)
+	CC="$(HOST_GCC) $(HOST_CSTD)" PLATFORM="$(PLATFORM)" VARIANT="$(VARIANT)" sh build/hv_reset/gnu/build.sh $(HV_WORK)
 	@mkdir -p $(OUTDIR)
 	cp $(HV_WORK)/reset.bin $(HV_WORK)/q.bin $(OUTDIR)/
 
@@ -220,6 +220,6 @@ else
 	@type python3 >/dev/null 2>&1 || { echo "hv-test needs python3" >&2; exit 2; }
 	@rm -rf "$(WORKDIR)/hv-test"
 	OUTDIR="$(WORKDIR)/hv-test" PLATFORM="$(PLATFORM)" VARIANT="$(VARIANT)" \
-	HV_EXTRA_OPTS="$(QEMU_EXTRA_OPTIONS)" \
+	CC="$(HOST_GCC) $(HOST_CSTD)" HV_EXTRA_OPTS="$(QEMU_EXTRA_OPTIONS)" \
 	    tests/lib/gate.sh hv tests/full/hv_reset/run
 endif

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 # Copyright (c) 2026 sun4v-qemu-kit author(s), see the AUTHORS file
 # Build the OpenSPARC T2 q.bin/reset.bin with a stock GNU cross toolchain --
-# no Sun Studio, no Sun as, no stabs, no aschk, no SunPro make.
+# no Sun Studio, no Sun as, no stabs, no SunPro make. Sun's aschk, which checks the assembler
+# sources against offsets.chk, is built from source here (see "aschk" below).
 #
 # Notes on the layout:
 #   - T2 is this repo's vendored src/hypervisor; ABI is abi/ next to this script (SPARC V9
@@ -43,10 +44,36 @@ VARIANT=${VARIANT:-legion}
 mkdir -p "$W"
 cd "$W"
 
-if [ ! -f offsets.h ]; then
-    echo "=== offsets.h missing, generating ==="
+if [ ! -f offsets.h ] || [ ! -f offsets.chk ]; then
+    echo "=== offsets.h or offsets.chk missing, generating ==="
     sh "$HERE/build-offsets.sh" "$PWD"
 fi
+
+# ----------------------------------------------------------------- aschk ---
+# Sun's Makefile.platform has `q: chkasm`: aschk reads every .s of the hypervisor and checks each
+# load and store that names an offsets.h constant against offsets.chk (the size and the type of the
+# field), and the build stops on a mismatch. It is a plain C program that runs no SPARC code, so it
+# runs here too, built from Sun's source in a copy of support/aschk with two small fixes
+# (patches/hv/gnu/aschk-host-build.patch). It reads the sources as they are in src/, not the
+# srcfix/ versions: the same files, and the same offsets.chk, as on the sun path.
+# The -include flags give the headers that Solaris brought in by itself. CC is the host compiler and
+# its -std, as for build/mdtools/gnu/build.sh (make passes "$(HOST_GCC) $(HOST_CSTD)"): basics.h
+# defines `false` and `true` as enumerators, which C23, the default of gcc 15 and later, makes
+# keywords, so those need HOST_CSTD=-std=gnu17 (./configure sets it).
+WD=$PWD
+rm -rf aschk; mkdir aschk
+cp "$T2"/support/aschk/*.c "$T2"/support/aschk/*.h "$T2"/support/aschk/*.l aschk/
+patch -s -p1 -d aschk -i "$REPO/patches/hv/gnu/aschk-host-build.patch" </dev/null \
+    || { echo "aschk-host-build.patch failed to apply" >&2; exit 1; }
+${CC:-gcc} -O1 -w -include stdint.h -include stdlib.h -include string.h -include stdio.h \
+    -Werror=implicit-function-declaration -Werror=implicit-int \
+    -o aschk/aschk aschk/aschk_main.c aschk/ashash.c aschk/aslex.c > aschk/build.log 2>&1 \
+    || { echo "ASCHK BUILD FAIL" >&2; cat aschk/build.log >&2; exit 1; }
+( cd "$T2" && "$WD/aschk/aschk" -u -s -n "$WD/offsets.chk" \
+      greatlakes/$PLATFORM/src/*.s greatlakes/common/src/*.s greatlakes/$PLATFORM/dumbreset/*.s common/src/*.s ) \
+    > aschk.log 2>&1 \
+    || { echo "ASCHK FAIL: an access in the assembler sources does not match offsets.chk" >&2; cat aschk.log >&2; exit 1; }
+echo "aschk: the assembler sources match offsets.chk"
 
 # The -D set comes straight out of the Makefiles (hv-opts.sh); mining the
 # shipped binary also works but only for variants Sun actually shipped, and

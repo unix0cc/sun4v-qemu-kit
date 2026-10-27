@@ -39,5 +39,10 @@ RUN apt-get update \
 # The mounted tree belongs to another uid than root: without this git says "dubious ownership" and the banner reads "git unknown".
 RUN git config --system --add safe.directory /src
 
+# The distribution's gcc may default to C23 (GCC 15: Ubuntu 26.04), which the sources predate (README.configure); ./configure sets
+# -std=gnu17 then, but `make all` without it (the plain run above) would not. GCC 13 and 14 default to gnu17 already, so this
+# changes nothing there. Both are plain make variables, taken from the environment; ./configure's own values override them.
+ENV GNU_CSTD=-std=gnu17 HOST_CSTD=-std=gnu17
+
 WORKDIR /src
 CMD ["make", "all"]

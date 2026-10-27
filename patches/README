@@ -27,12 +27,16 @@ The components:
     patches/hv/           applied by build/hv_reset.mk (and, on the gnu path,
                           build/hv_reset/gnu/build.sh) to a copy of
                           src/hypervisor
+    patches/hv/gnu/       the gnu path's own, applied by
+                          build/hv_reset/gnu/build.sh to a copy of
+                          support/aschk
     patches/mdtools/gnu/  applied by build/mdtools.mk to a copy of the
                           mdgen/mdlint sources
 
 To add one: write the diff, drop it in the right subdirectory, and name it where that component applies its patches; the order
 there is the apply order:
     patches/hv/           a `$(PATCH) ... -i` line in build/hv_reset.mk, and the same patch in build/hv_reset/gnu/build.sh
+    patches/hv/gnu/       a `patch` line in build/hv_reset/gnu/build.sh
     patches/obp/forth/    a `$(PATCH) ... -i` line in build/obp.mk (sun path) and the OBP_PATCHES list in build/obp/gnu/obp-gnu.mk (gnu path)
     patches/obp/sun/      a `$(PATCH) ... -i` line in build/obp.mk
     patches/obp/gnu/      the engine's own build, build/obp/gnu/engine/Makefile
@@ -55,6 +59,11 @@ header.
     hv/hv-ds12-offsets-dwarf.patch                      sun path, when the cc
         Make offsets.h and offsets.chk from DWARF, for a cc that writes no
         stabs (Oracle Developer Studio 12.6). See build/hv_reset/README.dwarf.
+
+    hv/gnu/aschk-host-build.patch                       gnu path
+        Make Sun's aschk (the check of the assembler sources against
+        offsets.chk) run on a Linux host: a one-byte stack overflow in reading
+        offsets.chk and a double free in the scanner, both invisible on Solaris.
 
     mdtools/gnu/mdgen-mdlint-host-endian.patch
         Give mdgen/mdlint's network-byte-order macros a little-endian arm

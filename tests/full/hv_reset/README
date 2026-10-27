@@ -33,6 +33,11 @@ Layout
                             for ontario/legion offsets.h and offsets.chk are
                             byte-identical to the Sun-made gnu/reference/.
                             Catches a DWARF reader that misreads a layout.
+      aschk.sh              the build ran Sun's aschk on the assembler sources (build.sh,
+                            as `q: chkasm` does on the sun path) with no report, and aschk
+                            rejects a wrong size: CONFIG_MEMSIZE 4 instead of 8 is reported
+                            at main.s:212. A checker that has never been seen to fail
+                            proves nothing.
     lib/build.sh            the shared build, stderr visible; reused if OUTDIR
                             already holds one
     lib/genoffsets.py       the second, independent computation of offsets.h

@@ -1,0 +1,65 @@
+hv (gnu path): make Sun's aschk build and run on a Linux host.
+
+aschk is a plain C program (a lex scanner and a hash table): it reads the assembler sources and
+offsets.chk, and reports a memory access whose size or type does not match the field offsets.chk
+names. Sun's Makefile.platform runs it before every link (`q: chkasm`). It runs no SPARC code, so the
+gnu path can run it too, from source, as the sun path does. Two defects in it, both invisible on
+Solaris and fatal under glibc:
+
+  - aschk_main.c add_name_file(): `char typestr[4]` takes sscanf("%4s"), which writes five bytes (four
+    characters and the terminator): one byte past the array, onto the stack.
+  - aslex.c (and aslex.l, which it was made from) lex_only(), label `cleanup:`: the block that frees
+    tok_left_ptr is there twice, one after the other: a double free, which glibc stops the process on.
+    The second copy is meant for the right operand (tok_right_ptr, never freed otherwise: with the
+    second copy left in, AddressSanitizer shows the right-hand names, read at the two get_token()
+    calls after the '+', as the leak). It frees tok_right_ptr, under the same condition.
+    That is a reading of the code, checked by running: no double free, and those leaks are gone.
+    (A leak of the register after `store` is still there; a few kilobytes in a program that runs
+    for a second.)
+
+The scanner is the shipped aslex.c, not a fresh flex run: the build needs no flex. aslex.l carries the
+same change so that the two stay the same text. Nothing else in the tool is changed. For the
+unmodified hypervisor sources and the reference offsets.chk it reports nothing and exits 0; for an
+offsets.chk with CONFIG_MEMSIZE's size changed from 8 to 4 it reports main.s:212 and main.s:1486 and
+exits 1.
+
+gnu path only; changes nothing in the product (aschk writes no file). Applied by
+build/hv_reset/gnu/build.sh to a copy of src/hypervisor/src/support/aschk, never to src/.
+
+--- a/aschk_main.c
++++ b/aschk_main.c
+@@ -149,7 +149,7 @@
+ {
+ 	FILE *fp;
+ 	char	linebuf[MAXLINE];
+-	char	typestr[4];
++	char	typestr[8];
+ 	char	symname[MAXLINE];
+ 	int	offset, size;
+ 	int	linenum;
+--- a/aslex.c
++++ b/aslex.c
+@@ -2312,8 +2312,8 @@
+ 		if (tok_left == T_name || tok_left == T_register) {
+ 			free(tok_left_ptr);
+ 		}
+-		if (tok_left == T_name || tok_left == T_register) {
+-			free(tok_left_ptr);
++		if (tok_right == T_name || tok_right == T_register) {
++			free(tok_right_ptr);
+ 		}
+ 		goto swallow;
+ 
+--- a/aslex.l
++++ b/aslex.l
+@@ -415,8 +415,8 @@
+ 		if (tok_left == T_name || tok_left == T_register) {
+ 			free(tok_left_ptr);
+ 		}
+-		if (tok_left == T_name || tok_left == T_register) {
+-			free(tok_left_ptr);
++		if (tok_right == T_name || tok_right == T_register) {
++			free(tok_right_ptr);
+ 		}
+ 		goto swallow;
+ 

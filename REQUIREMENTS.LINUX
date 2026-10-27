@@ -24,7 +24,7 @@ Debian/Ubuntu packages, and what they provide:
     qemu-system-sparc                     qemu-system-sparc64, for the tests
                                           (QEMU= overrides)
 
-    gcc                                   host compiler (for mdgen/mdlint)
+    gcc                                   host compiler (for mdgen/mdlint and aschk)
     cpp                                   traditional cpp (-traditional-cpp)
     binutils                              ar
     make 4.3 or later (GNU)               grouped targets (`&:`) in build/obp/gnu/obp-gnu.mk

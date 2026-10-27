@@ -85,7 +85,7 @@ build/hv_reset.mk.)
 GNU toolchain (TOOLCHAIN=gnu)
 -----------------------------
 A port, not a rebuild. gnu/build.sh replaces Sun's makefiles and toolchain.
-It does four things:
+It does five things:
 
   - Rewrites syntax that Sun's as accepts and GNU as rejects: gnu/fixup.sed
     and the fix() calls in build.sh, each with a comment.
@@ -93,8 +93,15 @@ It does four things:
   - Links with its own linker script, q.ld, instead of Sun's mapfile.
   - Adds a memcpy shim. gcc emits memcpy calls for struct copies, Sun's cc
     did not, and the hypervisor has no memcpy of its own.
+  - Runs Sun's aschk, as `q: chkasm` does on the sun path: every load and
+    store in the .s files that names an offsets.h constant is checked against
+    offsets.chk, and a mismatch stops the build. aschk runs no SPARC code; it
+    is built from Sun's source with two fixes for a Linux host
+    (patches/hv/gnu/aschk-host-build.patch) by the host compiler (HOST_GCC,
+    HOST_CSTD). tests/full/hv_reset/internal/aschk.sh shows it fails on a
+    wrong size.
 
-offsets.h cannot be made the Sun way (gcc removed -gstabs in GCC 12, and Sun's
+offsets.h cannot be made the Sun way (gcc removed -gstabs in GCC 13, and Sun's
 stabs reads only Sun's dialect anyway), but it can be made with Sun's
 semantics: dwarf2genassym.pl compiles a stub that refers to every type
 offsets.in names with -gdwarf-4, reads the layout from
