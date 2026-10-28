@@ -48,6 +48,13 @@ obp/os/sun/sparc/forth.dic:
 The whole chain, from forth.dic to openboot.bin with the tools, the two engines
 and the dropins, is drawn in docs/obp-build-flow.png.
 
+Reading the diagram. The round badge at a box's top right is what the file
+holds: N native code, 32 or 64 SPARC code of that width, T text or data. The
+square badge at its bottom left is what runs the step: N without qemu-user,
+32 or 64 a SPARC program of that width (on the sun path it runs natively, on
+the gnu path under qemu-user). A box split in colour shows both paths: Sun
+Studio 11 to 12.5, Developer Studio 12.6, and GNU; white is the same on all.
+
 The 32-bit kernel is built twice in that chain, once by the shipped root and
 once by a host rebuilt around the new kernel. The two are identical: the
 kernel reproduces itself. Both paths run this chain from the same root, so
@@ -75,6 +82,13 @@ The engine is built twice, and each runs the steps Sun's build runs on it:
 There is no sparc-linux-gnu triplet; the 32-bit engine comes from the sparc64
 cross gcc's -m32 multilib and Ubuntu's 32-bit SPARC glibc
 (gcc-13-multilib-sparc64-linux-gnu, libc6-dev-sparc-sparc64-cross).
+
+didepend, which reads dropins.src and writes text, is built by the host gcc and
+runs natively. makedi and makeprom are not: they fill the OBMD header fields
+of sys/dropins.h and add up checksum words with no byte swap, correct only
+on a big-endian host, so a native x86 build would write wrong bytes without
+an error. They run as SPARC programs. Making them endian-safe, and so
+native, is possible and not done.
 
 Sun's own dropins.mk and every per-dropin depend.mk are used unchanged; only
 the dmake layer (common.mk) is reimplemented, in
