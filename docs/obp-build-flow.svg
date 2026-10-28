@@ -2,7 +2,7 @@
 <defs><marker id="ar" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#555"/></marker><marker id="ark" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#8a5a00"/></marker><marker id="arR" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#e8101c"/></marker><marker id="argY" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#2e9e3c"/></marker></defs>
 <rect width="1650" height="1110" fill="#fbfbf8"/><rect width="1650" height="110" fill="#f0eee6"/>
 <text x="60" y="52" font-size="38" font-weight="700" fill="#1a1a1a">sun4v-qemu-kit: OpenBoot PROM build flow <tspan font-weight="400" fill="#555">– for openboot.bin</tspan></text>
-<text x="60" y="92" font-size="22" text-anchor="start" fill="#1a1a1a">The same Sun steps on both paths: they differ in who builds the tools and who runs the SPARC code.</text>
+<text x="60" y="92" font-size="22" text-anchor="start" fill="#1a1a1a">Native and cross toolchains, one build chain, the same SPARC Forth code</text>
 <line x1="44" y1="110" x2="1606" y2="110" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
 <rect x="60" y="140" width="360" height="38" fill="#fff"/>
 <rect x="60" y="178" width="180.0" height="36" fill="#eaf4fd"/><rect x="240.0" y="178" width="180.0" height="36" fill="#fdecec"/>
