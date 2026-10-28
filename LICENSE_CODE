@@ -70,7 +70,7 @@ and no Solaris binary is in this tree. forth.dic is the root and has no
 source of its own; the other six are rebuilt from Forth source in src/obp on
 every build, starting from it, and the shipped copies are not read
 (build/obp/README).
-The chain is drawn in docs/obp-chain.png.
+The chain is drawn in docs/obp-build-flow.png.
 
 
 CDDL in src/hypervisor/src/support/stabs/

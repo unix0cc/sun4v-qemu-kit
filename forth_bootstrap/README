@@ -95,7 +95,7 @@ nothing else was compared).
 
 How it works
 ------------
-The chain is drawn in ../docs/obp-chain.png (floor 0 is this directory).
+The chain is drawn in ../docs/obp-build-flow.png (the dashed experimental lane is this directory).
 
 Step 1 of the chain, kernel-xref.dic and its two word listings, is normally
 made from forth.dic. Here it is made by Sun's own metacompiler running on
@@ -149,5 +149,5 @@ Not shown, not changed:
     PRISTINE-MANIFEST and the src-intact test.
   * SPARC code still runs at build time: cforth is cross-built for sparc32 and
     runs under qemu-user, as does the engine.
-  * Only step 1 is replaced (floor 0 of ../docs/obp-chain.png). The later
+  * Only step 1 is replaced (the experimental lane of ../docs/obp-build-flow.png). The later
     steps (forth32-xref ... tokenize) are Sun's, on Sun's engine.

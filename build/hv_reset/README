@@ -1,6 +1,9 @@
 hv_reset: hypervisor (q.bin) and CPU reset vector (reset.bin)
 =============================================================
 
+The whole flow, both toolchains, from offsets.in to q.bin and reset.bin, is
+drawn in docs/hv-build-flow.png (the source is docs/hv-build-flow.svg).
+
 Build
 -----
     make hv_reset                  toolchain is picked from `uname -s`

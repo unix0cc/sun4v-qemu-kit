@@ -1,6 +1,9 @@
 offsets.h and offsets.chk from DWARF
 ====================================
 
+Where this fits in the whole hypervisor build, and the routes side by side:
+docs/hv-build-flow.png (steps 1 to 4).
+
 What the original does
 ----------------------
 The hypervisor's assembler sources need the byte offsets of C struct members,

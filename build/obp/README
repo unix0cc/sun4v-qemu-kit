@@ -46,7 +46,7 @@ obp/os/sun/sparc/forth.dic:
               -> f32t32.dic -> k64t32.dic, and f32t32.dic -> tokenize.dic
 
 The whole chain, from forth.dic to openboot.bin with the tools, the two engines
-and the dropins, is drawn in docs/obp-chain.png.
+and the dropins, is drawn in docs/obp-build-flow.png.
 
 The 32-bit kernel is built twice in that chain, once by the shipped root and
 once by a host rebuilt around the new kernel. The two are identical: the

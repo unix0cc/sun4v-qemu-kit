@@ -1,0 +1,435 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1650 1110" width="1650" height="1110" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="ar" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#555"/></marker><marker id="ark" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#8a5a00"/></marker><marker id="arR" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#e8101c"/></marker><marker id="argY" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#2e9e3c"/></marker></defs>
+<rect width="1650" height="1110" fill="#fbfbf8"/><rect width="1650" height="110" fill="#f0eee6"/>
+<text x="60" y="52" font-size="38" font-weight="700" fill="#1a1a1a">sun4v-qemu-kit: OpenBoot PROM build flow <tspan font-weight="400" fill="#555">– for openboot.bin</tspan></text>
+<text x="60" y="92" font-size="22" text-anchor="start" fill="#1a1a1a">The same Sun steps on both paths: they differ in who builds the tools and who runs the SPARC code.</text>
+<line x1="44" y1="110" x2="1606" y2="110" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="60" y="140" width="360" height="38" fill="#fff"/>
+<rect x="60" y="178" width="180.0" height="36" fill="#eaf4fd"/><rect x="240.0" y="178" width="180.0" height="36" fill="#fdecec"/>
+<rect x="60" y="214" width="360" height="36" fill="#eaf6ea"/>
+<rect x="60" y="140" width="360" height="110" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="60" y1="178" x2="420" y2="178" stroke="#1a1a1a" stroke-width="1.2"/><line x1="60" y1="214" x2="420" y2="214" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="240.0" y="157" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">copy of src/obp + patches/obp/forth (4)</text>
+<text x="240.0" y="172" font-size="11" text-anchor="middle" fill="#555">both paths: e1000 (2), IDE, MD-iodevice guard</text>
+<text x="240.0" y="200" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: + elf2bin patch (for Developer Studio 12.6)</text>
+<text x="240.0" y="236" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: + patches/obp/gnu (5): engine, host tools</text>
+<circle cx="60" cy="140" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="146" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">1</text>
+<rect x="65" y="187" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="76" y="202" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="65" y="223" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="76" y="238" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<circle cx="404" cy="156" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="404" y="160" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<rect x="950" y="140" width="320.0" height="55.0" fill="#eaf4fd"/>
+<rect x="1270.0" y="140" width="320.0" height="55.0" fill="#fdecec"/>
+<rect x="950" y="195.0" width="640" height="55.0" fill="#eaf6ea"/>
+<rect x="950" y="140" width="640" height="110" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="950" y1="195.0" x2="1590" y2="195.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="1270.0" y="164.0" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: Sun's makefiles, /usr/ccs/bin/make + Sun Studio cc, native:</text>
+<text x="1270.0" y="179.0" font-size="12" text-anchor="middle" fill="#333">the Forth engine, makedi, makeprom, didepend</text>
+<text x="1270.0" y="219.0" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: build-obp.sh cross-builds forth32 (-m32), forth64, makedi, makeprom</text>
+<text x="1270.0" y="234.0" font-size="12" text-anchor="middle" fill="#333">for SPARC (run under qemu-user); didepend with the host gcc</text>
+<circle cx="950" cy="140" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="950" y="146" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">2</text>
+<rect x="955" y="168" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="966" y="183" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="955" y="223" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="966" y="238" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<circle cx="1574" cy="156" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1574" y="160" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="1548" cy="156" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1548" y="160" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1574" cy="211" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1574" y="215" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="1548" cy="211" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1548" y="215" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1522" cy="211" r="11" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="1522" y="215" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<text x="970" y="132" font-size="13" font-weight="700" text-anchor="start" fill="#1a1a1a">tools, built first</text>
+<rect x="440" y="140" width="495" height="110" rx="8" fill="#fff" stroke="#8a5a00" stroke-width="2.2" stroke-dasharray="6 4"/>
+<text x="687.5" y="174.5" font-size="13" font-weight="700" text-anchor="middle" fill="#8a5a00">experimental, not part of make all</text>
+<text x="687.5" y="191.5" font-size="12" text-anchor="middle" fill="#8a5a00">cforth + ~160 lines of Forth run Sun’s metacompiler</text>
+<text x="687.5" y="208.5" font-size="12" text-anchor="middle" fill="#8a5a00">and write kernel-xref.dic: forth.dic is not read</text>
+<text x="687.5" y="225.5" font-size="12" text-anchor="middle" fill="#8a5a00">(OBP_SEED=kernel-xref)</text>
+<g transform="translate(0,-52)">
+<rect x="60" y="392" width="210" height="90" rx="8" fill="#fff4e0" stroke="#b9791f" stroke-width="2.2"/>
+<text x="165.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth.dic</text>
+<text x="165.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">shipped root, no source</text>
+<text x="165.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">os/sun/sparc</text>
+<path d="M270,437.0 L312,437.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="314" y="392" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="419.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">kernel-xref.dic</text>
+<text x="419.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">32-bit kernel</text>
+<text x="419.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">metacompiled: conft32 + loadkern</text>
+<path d="M524,437.0 L566,437.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="568" y="392" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="673.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth32-xref.dic</text>
+<text x="673.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">host dictionary</text>
+<text x="673.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">loadutil.fth</text>
+<path d="M778,437.0 L820,437.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="822" y="392" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="927.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">k32t32-xref.dic</text>
+<text x="927.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">the 32-bit kernel again</text>
+<text x="927.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">metacompiled on forth32-xref</text>
+<path d="M1032,437.0 L1074,437.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1076" y="392" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1181.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">f32t32.dic</text>
+<text x="1181.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">host dictionary</text>
+<text x="1181.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">loadutil.fth</text>
+<path d="M1286,437.0 L1328,437.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1330" y="392" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1435.0" y="417.0" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">k64t32.dic</text>
+<text x="1435.0" y="434.0" font-size="12" text-anchor="middle" fill="#333">final kernel, 64-bit cells</text>
+<text x="1435.0" y="451.0" font-size="11" text-anchor="middle" fill="#777">metacompiled: conf64 + loadkern</text>
+<circle cx="60" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="398" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">3</text>
+<circle cx="314" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="314" y="397" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3a</text>
+<circle cx="568" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="568" y="397" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3b</text>
+<circle cx="822" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="822" y="397" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3c</text>
+<circle cx="1076" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1076" y="397" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3d</text>
+<circle cx="1330" cy="392" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1330" y="397" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3e</text>
+<circle cx="254" cy="408" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="254" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="508" cy="408" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="508" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="319" y="455" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="330" y="470" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="762" cy="408" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="762" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="573" y="455" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="584" y="470" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1016" cy="408" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1016" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="827" y="455" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="838" y="470" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1270" cy="408" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1270" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="1081" y="455" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1092" y="470" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1524" cy="408" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1524" y="412" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<rect x="1335" y="455" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1346" y="470" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<text x="1445.0" y="512" font-size="11" font-weight="700" text-anchor="start" fill="#1a1a1a">the first 64-bit dictionary</text>
+<rect x="1076" y="500" width="210" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1181.0" y="520.5" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">tokenize.dic</text>
+<text x="1181.0" y="537.5" font-size="11" text-anchor="middle" fill="#777">FCode tokenizer</text>
+<circle cx="1076" cy="500" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1076" y="505" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3f</text>
+<circle cx="1270" cy="516" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1270" y="520" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="1081" y="529" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1092" y="544" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<path d="M1181,482 L1181,498" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M419,482 L419,530 L637,530" fill="none" stroke="#555" stroke-width="2.3"/>
+<path d="M927,482 L927,530 L709,530" fill="none" stroke="#555" stroke-width="2.3"/>
+<polygon points="673,504 709,530 673,556 637,530" fill="#e8101c" stroke="#8a0a12" stroke-width="2"/>
+<text x="673" y="528" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">3a = 3c?</text>
+<text x="673" y="542" font-size="12" font-weight="700" text-anchor="middle" fill="#fff"></text>
+<line x1="673" y1="556" x2="673" y2="586" stroke="#e8101c" stroke-width="2.3" marker-end="url(#arR)"/>
+<text x="681" y="582" font-size="13" font-weight="700" text-anchor="start" fill="#e8101c">N</text>
+<text x="697" y="582" font-size="11" font-weight="700" text-anchor="start" fill="#e8101c">stop</text>
+<text x="720" y="550" font-size="11" text-anchor="start" fill="#2e7d32">GNU only (bootstrap-dics.sh):</text>
+<text x="720" y="563" font-size="11" text-anchor="start" fill="#2e7d32">the kernel must rebuild itself</text>
+<rect x="60" y="556" width="590" height="82" rx="8" fill="#fff" stroke="#999" stroke-width="1.3" stroke-dasharray="5 4"/>
+<circle cx="80" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="80" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3a</text>
+<circle cx="110" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="110" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3b</text>
+<circle cx="140" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="140" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3c</text>
+<circle cx="170" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="170" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3d</text>
+<circle cx="200" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="200" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3e</text>
+<circle cx="230" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="230" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">3f</text>
+<circle cx="260" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="260" y="583" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">10</text>
+<circle cx="290" cy="578" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="290" y="582" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">10b</text>
+<circle cx="80" cy="614" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="80" y="620" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">4</text>
+<circle cx="110" cy="614" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="110" y="620" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">7</text>
+<rect x="1330" y="656" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1435.0" y="674.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">bootprom.bin,</text>
+<text x="1435.0" y="691.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">stand.dic</text>
+<text x="1435.0" y="708.5" font-size="11" text-anchor="middle" fill="#333">k64t32 + preload, loadprom,</text>
+<text x="1435.0" y="725.5" font-size="11" text-anchor="middle" fill="#333">version, builtin.fth</text>
+<circle cx="1330" cy="656" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1330" y="662" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">4</text>
+<circle cx="1524" cy="672" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1524" y="676" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<rect x="1335" y="719" width="22" height="22" rx="4" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1346" y="734" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<path d="M1435,482 L1435,654" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1076" y="656" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1181.0" y="681.0" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">headers</text>
+<text x="1181.0" y="698.0" font-size="12" text-anchor="middle" fill="#333">→ acfheaders → headerless</text>
+<text x="1181.0" y="715.0" font-size="11" text-anchor="middle" fill="#777">sort, grep (LC_ALL=C)</text>
+<circle cx="1076" cy="656" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1076" y="662" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">5</text>
+<rect x="1081" y="719" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="1092" y="734" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<circle cx="1270" cy="672" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1270" y="676" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M1330,701.0 L1288,701.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="314" y="656" width="105.0" height="45.0" fill="#eaf4fd"/>
+<rect x="419.0" y="656" width="105.0" height="45.0" fill="#fdecec"/>
+<rect x="314" y="701.0" width="210" height="45.0" fill="#eaf6ea"/>
+<rect x="314" y="656" width="210" height="90" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="314" y1="701.0" x2="524" y2="701.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="419.0" y="675.0" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun Studio cc</text>
+<text x="419.0" y="690.0" font-size="11" text-anchor="middle" fill="#333">decomp.o</text>
+<text x="419.0" y="720.0" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">gcc -m32 -mcpu=v8</text>
+<text x="419.0" y="735.0" font-size="11" text-anchor="middle" fill="#333">-fno-pic: decomp.o</text>
+<circle cx="314" cy="656" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="314" y="662" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">6</text>
+<circle cx="508" cy="672" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="508" y="676" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="319" y="674.0" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="330" y="689.0" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="319" y="719" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="330" y="734" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="822" y="656" width="210" height="90" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="927.0" y="681.0" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">reset.o</text>
+<text x="927.0" y="698.0" font-size="12" text-anchor="middle" fill="#333">made by forth64 -d stand.dic</text>
+<text x="927.0" y="715.0" font-size="11" text-anchor="middle" fill="#777">writes a 32-bit ELF</text>
+<circle cx="822" cy="656" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="822" y="662" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">7</text>
+<circle cx="1016" cy="672" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1016" y="676" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="827" y="719" width="22" height="22" rx="4" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="838" y="734" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<path d="M1076,701.0 L1034,701.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="568" y="656" width="105.0" height="45.0" fill="#eaf4fd"/>
+<rect x="673.0" y="656" width="105.0" height="45.0" fill="#fdecec"/>
+<rect x="568" y="701.0" width="210" height="45.0" fill="#eaf6ea"/>
+<rect x="568" y="656" width="210" height="90" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="568" y1="701.0" x2="778" y2="701.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="673.0" y="675.0" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun's elf2bin (patched)</text>
+<text x="673.0" y="690.0" font-size="11" text-anchor="middle" fill="#333">reset.bin, then padded</text>
+<text x="673.0" y="720.0" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">ld -T openboot.ld, objcopy</text>
+<text x="673.0" y="735.0" font-size="11" text-anchor="middle" fill="#333">reset.bin, then padded</text>
+<circle cx="568" cy="656" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="568" y="662" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">8</text>
+<circle cx="762" cy="672" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="762" y="676" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="573" y="674.0" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="584" y="689.0" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="573" y="719" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="584" y="734" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<path d="M822,701.0 L780,701.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M524,701.0 L566,701.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M419,746 L419,762 L927,762 L927,748" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<text x="60" y="790" font-size="13" font-weight="700" text-anchor="start" fill="#1a1a1a">dropins: Sun's dropins.mk and depend.mk, unchanged on both paths</text>
+<rect x="60" y="812" width="210" height="70" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="165.0" y="843.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">dropins.src</text>
+<text x="165.0" y="860.5" font-size="11" text-anchor="middle" fill="#777">sun4v/&lt;platform&gt;/release</text>
+<circle cx="60" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="818" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">9</text>
+<circle cx="254" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="254" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<rect x="314" y="812" width="105.0" height="35.0" fill="#eaf4fd"/>
+<rect x="419.0" y="812" width="105.0" height="35.0" fill="#fdecec"/>
+<rect x="314" y="847.0" width="210" height="35.0" fill="#eaf6ea"/>
+<rect x="314" y="812" width="210" height="70" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="314" y1="847.0" x2="524" y2="847.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="419.0" y="833.5" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: didepend</text>
+<text x="419.0" y="868.5" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: didepend, host gcc</text>
+<circle cx="314" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="314" y="817" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">9a</text>
+<rect x="319" y="820.0" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="330" y="835.0" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<rect x="319" y="855" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="330" y="870" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<circle cx="508" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="508" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M270,847.0 L312,847.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="568" y="812" width="210" height="70" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="673.0" y="843.5" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">dropins.mk, builtin.fth</text>
+<text x="673.0" y="860.5" font-size="11" text-anchor="middle" fill="#777">what to build, and in which order</text>
+<circle cx="568" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="568" y="817" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">9b</text>
+<circle cx="762" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="762" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M524,847.0 L566,847.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="822" y="812" width="210" height="70" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="927.0" y="834.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">TOKENIZE</text>
+<text x="927.0" y="851.5" font-size="11" text-anchor="middle" fill="#333">tokenize.dic: *.tok → *.fc</text>
+<circle cx="822" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="822" y="817" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">10</text>
+<rect x="827" y="855" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="838" y="870" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1016" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1016" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M778,847.0 L820,847.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1076" y="812" width="105.0" height="35.0" fill="#eaf4fd"/>
+<rect x="1181.0" y="812" width="105.0" height="35.0" fill="#fdecec"/>
+<rect x="1076" y="847.0" width="210" height="35.0" fill="#eaf6ea"/>
+<rect x="1076" y="812" width="210" height="70" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="1076" y1="847.0" x2="1286" y2="847.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="1181.0" y="833.5" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: makedi -c</text>
+<text x="1181.0" y="861.0" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: makedi</text>
+<text x="1181.0" y="876.0" font-size="11" text-anchor="middle" fill="#2e7d32">under qemu-sparc64</text>
+<circle cx="1076" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1076" y="816" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">10a</text>
+<rect x="1081" y="820.0" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1092" y="835.0" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="1081" y="855" width="22" height="22" rx="4" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1092" y="870" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="1270" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1270" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M1032,847.0 L1074,847.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1330" y="812" width="210" height="70" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1435.0" y="843.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">builtin.di</text>
+<text x="1435.0" y="860.5" font-size="11" text-anchor="middle" fill="#777">every dropin, one file</text>
+<circle cx="1330" cy="812" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1330" y="816" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">10c</text>
+<circle cx="1524" cy="828" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1524" y="832" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M1286,847.0 L1328,847.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="822" y="900" width="210" height="66" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="927.0" y="920.5" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">FORTHTOOL</text>
+<text x="927.0" y="937.5" font-size="11" text-anchor="middle" fill="#333">f32t32: mkfonts, mklogo</text>
+<circle cx="822" cy="900" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="822" y="904" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">10b</text>
+<rect x="827" y="939" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="838" y="954" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="1016" cy="916" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1016" y="920" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<rect x="1076" y="900" width="210" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1181.0" y="933.0" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">font.di, sun-logo.di</text>
+<circle cx="1270" cy="916" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="1270" y="920" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<path d="M1032,928 L1074,928" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M1286,928 L1400,928 L1400,884" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M1181,556 L1181,580 L805,580 L805,861.0 L820,861.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M805,861.0 L805,928 L820,928" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<text x="812" y="596" font-size="11" text-anchor="start" fill="#777">tokenize.dic, f32t32.dic</text>
+<rect x="822" y="1010" width="105.0" height="40.0" fill="#eaf4fd"/>
+<rect x="927.0" y="1010" width="105.0" height="40.0" fill="#fdecec"/>
+<rect x="822" y="1050.0" width="210" height="40.0" fill="#eaf6ea"/>
+<rect x="822" y="1010" width="210" height="80" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="822" y1="1050.0" x2="1032" y2="1050.0" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="927.0" y="1034.0" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: makeprom</text>
+<text x="927.0" y="1066.5" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: makeprom</text>
+<text x="927.0" y="1081.5" font-size="11" text-anchor="middle" fill="#2e7d32">under qemu-sparc64</text>
+<circle cx="822" cy="1010" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="822" y="1015" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">11</text>
+<rect x="827" y="1023.0" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="838" y="1038.0" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="827" y="1063" width="22" height="22" rx="4" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="838" y="1078" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="1016" cy="1026" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1016" y="1030" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="990" cy="1026" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="990" y="1030" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<path d="M600,746 L600,786 L546,786 L546,1050.0 L820,1050.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M1480,882 L1480,985 L927,985 L927,1008" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<polygon points="1110,1016.0 1146,1050.0 1110,1084.0 1074,1050.0" fill="#e8101c" stroke="#8a0a12" stroke-width="2"/>
+<text x="1110" y="1048.0" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">chain</text>
+<text x="1110" y="1062.0" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">ok?</text>
+<path d="M1032,1050.0 L1072,1050.0" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<line x1="1110" y1="1084.0" x2="1110" y2="1110.0" stroke="#e8101c" stroke-width="2.3" marker-end="url(#arR)"/>
+<text x="1118" y="1106.0" font-size="13" font-weight="700" text-anchor="start" fill="#e8101c">N</text>
+<text x="1132" y="1106.0" font-size="11" font-weight="700" text-anchor="start" fill="#e8101c">stop</text>
+<text x="1150" y="1122.0" font-size="11" text-anchor="start" fill="#555">both paths: verify-dropin-chain.sh</text>
+<line x1="1146" y1="1050.0" x2="1178" y2="1050.0" stroke="#2e9e3c" stroke-width="2.3" marker-end="url(#argY)"/>
+<text x="1150" y="1042.0" font-size="13" font-weight="700" text-anchor="start" fill="#2e9e3c">Y</text>
+<rect x="1180" y="1010" width="200" height="80" rx="8" fill="#fff9d6" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1280.0" y="1052.5" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">openboot.bin</text>
+<text x="1280.0" y="1069.5" font-size="10" text-anchor="middle" fill="#333">records: reset 32, bootprom 64, FCode</text>
+<circle cx="1180" cy="1010" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1180" y="1015" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">12</text>
+<circle cx="1364" cy="1026" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="1364" y="1030" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<circle cx="1338" cy="1026" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="1338" y="1030" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="1420" y="1010" width="170" height="80" rx="8" fill="#fff" stroke="#8a5a00" stroke-width="2.2" stroke-dasharray="6 4"/>
+<text x="1505.0" y="1038.0" font-size="13" font-weight="700" text-anchor="middle" fill="#8a5a00">obp-verify, GNU only</text>
+<text x="1505.0" y="1055.0" font-size="11" text-anchor="middle" fill="#8a5a00">7 checks against the kernels</text>
+<text x="1505.0" y="1072.0" font-size="11" text-anchor="middle" fill="#8a5a00">and records Sun shipped</text>
+<path d="M1380,1050.0 L1418,1050.0" fill="none" stroke="#8a5a00" stroke-width="2.3" stroke-dasharray="6 4" marker-end="url(#ark)"/>
+</g>
+<rect x="60" y="904" width="470" height="150" rx="8" fill="#fff" stroke="#999" stroke-width="1.3" stroke-dasharray="5 4"/>
+<text x="74" y="926" font-size="13" font-weight="700" text-anchor="start" fill="#1a1a1a">Legend</text>
+<text x="74" y="958" font-size="11.5" font-weight="700" text-anchor="start" fill="#1a1a1a">Output, top right, round:</text>
+<circle cx="267" cy="954" r="11" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="267" y="958" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<text x="286" y="958" font-size="11" text-anchor="start" fill="#333">native</text>
+<circle cx="341" cy="954" r="11" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="341" y="958" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<circle cx="367" cy="954" r="11" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="367" y="958" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<text x="386" y="958" font-size="11" text-anchor="start" fill="#333">SPARC</text>
+<circle cx="457" cy="954" r="11" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+<text x="457" y="958" font-size="11" font-weight="700" text-anchor="middle" fill="#455a64">T</text>
+<text x="476" y="958" font-size="11" text-anchor="start" fill="#333">text/data</text>
+<text x="74" y="988" font-size="11.5" font-weight="700" text-anchor="start" fill="#1a1a1a">Execution, bottom left, square:</text>
+<rect x="256" y="973" width="22" height="22" rx="4" fill="#455a64" stroke="#263238" stroke-width="2"/>
+<text x="267" y="988" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">N</text>
+<text x="286" y="988" font-size="11" text-anchor="start" fill="#333">native</text>
+<rect x="330" y="973" width="22" height="22" rx="4" fill="#e9dcf3" stroke="#7b3f98" stroke-width="2"/>
+<text x="341" y="988" font-size="11" font-weight="700" text-anchor="middle" fill="#7b3f98">32</text>
+<rect x="356" y="973" width="22" height="22" rx="4" fill="#ffe3b8" stroke="#e07b00" stroke-width="2"/>
+<text x="367" y="988" font-size="11" font-weight="700" text-anchor="middle" fill="#a85200">64</text>
+<text x="386" y="988" font-size="11" text-anchor="start" fill="#333">SPARC, qemu-user</text>
+<text x="74" y="1010" font-size="10" text-anchor="start" fill="#777">(on the Sun path SPARC code runs natively)</text>
+<rect x="74" y="1024" width="22" height="16" rx="3" fill="#eaf4fd" stroke="#1a1a1a" stroke-width="1.4"/>
+<text x="102" y="1036" font-size="11" text-anchor="start" fill="#333">Sun Studio 11-12.5</text>
+<rect x="220" y="1024" width="22" height="16" rx="3" fill="#fdecec" stroke="#1a1a1a" stroke-width="1.4"/>
+<text x="248" y="1036" font-size="11" text-anchor="start" fill="#333">Developer Studio 12.6</text>
+<rect x="381" y="1024" width="22" height="16" rx="3" fill="#eaf6ea" stroke="#1a1a1a" stroke-width="1.4"/>
+<text x="409" y="1036" font-size="11" text-anchor="start" fill="#333">GNU</text>
+<rect x="452" y="1024" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1.4"/>
+<text x="480" y="1036" font-size="11" text-anchor="start" fill="#333">Any</text>
+<text x="60" y="1088" font-size="16" text-anchor="start" fill="#777">Step numbers follow the dependencies, not the order the tools run.</text>
+<path d="M165,250 L165,338" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<path d="M470,250 L470,338" fill="none" stroke="#8a5a00" stroke-width="2.3" stroke-dasharray="6 4" marker-end="url(#ark)"/>
+<rect x="312" y="514.0" width="88" height="24" rx="5" fill="#e9dcf3"/>
+<rect x="356.0" y="514.0" width="44.0" height="24" fill="#e9dcf3"/>
+<rect x="312" y="514.0" width="88" height="24" rx="5" fill="none" stroke="#7b3f98" stroke-width="2"/>
+<text x="356.0" y="530" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth32</text>
+<text x="410" y="530" font-size="11" text-anchor="start" fill="#555">SPARC-native or under qemu-sparc32plus</text>
+<rect x="136" y="550.0" width="88" height="24" rx="5" fill="#ffe3b8"/>
+<rect x="180.0" y="550.0" width="44.0" height="24" fill="#ffe3b8"/>
+<rect x="136" y="550.0" width="88" height="24" rx="5" fill="none" stroke="#e07b00" stroke-width="2"/>
+<text x="180.0" y="566" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth64</text>
+<text x="234" y="566" font-size="11" text-anchor="start" fill="#555">SPARC-native or under qemu-sparc64</text>
+<rect x="960" y="280.0" width="88" height="24" rx="5" fill="#e9dcf3"/>
+<rect x="1004.0" y="280.0" width="44.0" height="24" fill="#e9dcf3"/>
+<rect x="960" y="280.0" width="88" height="24" rx="5" fill="none" stroke="#7b3f98" stroke-width="2"/>
+<text x="1004.0" y="296" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth32</text>
+<path d="M1004,251 L1004,278" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1060" y="280.0" width="88" height="24" rx="5" fill="#ffe3b8"/>
+<rect x="1104.0" y="280.0" width="44.0" height="24" fill="#ffe3b8"/>
+<rect x="1060" y="280.0" width="88" height="24" rx="5" fill="none" stroke="#e07b00" stroke-width="2"/>
+<text x="1104.0" y="296" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">forth64</text>
+<path d="M1104,251 L1104,278" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1160" y="280.0" width="88" height="24" rx="5" fill="#cfd8dc"/>
+<rect x="1204.0" y="280.0" width="44.0" height="24" fill="#cfd8dc"/>
+<rect x="1160" y="280.0" width="88" height="24" rx="5" fill="none" stroke="#455a64" stroke-width="2"/>
+<text x="1204.0" y="296" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">didepend</text>
+<path d="M1204,251 L1204,278" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1260" y="280.0" width="88" height="24" rx="5" fill="#e9dcf3"/>
+<rect x="1304.0" y="280.0" width="44.0" height="24" fill="#ffe3b8"/>
+<rect x="1260" y="280.0" width="88" height="24" rx="5" fill="none" stroke="#555" stroke-width="2"/>
+<text x="1304.0" y="296" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">makedi*</text>
+<path d="M1304,251 L1304,278" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<rect x="1360" y="280.0" width="88" height="24" rx="5" fill="#e9dcf3"/>
+<rect x="1404.0" y="280.0" width="44.0" height="24" fill="#ffe3b8"/>
+<rect x="1360" y="280.0" width="88" height="24" rx="5" fill="none" stroke="#555" stroke-width="2"/>
+<text x="1404.0" y="296" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">makeprom*</text>
+<path d="M1404,251 L1404,278" fill="none" stroke="#555" stroke-width="2.3" marker-end="url(#ar)"/>
+<text x="1458" y="291" font-size="10.5" text-anchor="start" fill="#555">* potentially convertible</text>
+<text x="1458" y="304" font-size="10.5" text-anchor="start" fill="#555">to native (not yet)</text>
+<text x="1100" y="132" font-size="11" text-anchor="start" fill="#555">label colour = code of the tool (split: Sun | GNU)</text>
+</svg>

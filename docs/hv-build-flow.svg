@@ -1,0 +1,403 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1650 1380" width="1650" height="1380" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="ar" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#555"/></marker><marker id="ap" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#7b3f98"/></marker><marker id="arb" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#5aa9e6"/></marker><marker id="arr" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#e57373"/></marker><marker id="arg" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#4caf50"/></marker><marker id="ark" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#8a5a00"/></marker><marker id="ab" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#1a1a1a"/></marker><marker id="am" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#b9791f"/></marker><marker id="arR" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#e8101c"/></marker><marker id="argY" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 L1.3,2.5 z" fill="#2e9e3c"/></marker></defs>
+<rect width="1650" height="1380" fill="#fafaf7"/>
+<rect x="0" y="0" width="1650" height="116" fill="#f0eee6"/>
+<rect x="0" y="116" width="1650" height="1134" fill="#fbfbf8"/>
+<rect x="0" y="1250" width="1650" height="130" fill="#edf1f5"/>
+<text x="60" y="54" font-size="38" font-weight="700" fill="#1a1a1a">sun4v-qemu-kit: OpenSPARC T1 hypervisor build flow <tspan font-weight="400" fill="#555">– for q.bin and reset.bin</tspan></text>
+<text x="60" y="104" font-size="24" fill="#1a1a1a">OpenSPARC T2 sources, but the target platform is &quot;ontario&quot; (T1)</text>
+<line x1="44" y1="116" x2="1625" y2="116" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="60" y="154" font-size="18" font-weight="700" fill="#1a1a1a">q.bin <tspan font-weight="400" fill="#555">(the hypervisor): ~3/4 is SPARC V9d hyperprivileged assembly code + 1/4 is in C</tspan></text>
+<g transform="translate(0,-10)">
+<rect x="60" y="190" width="300" height="100" rx="12" fill="#fff" stroke="#1a1a1a" stroke-width="3"/>
+<text x="210" y="248" font-size="26" font-weight="700" text-anchor="middle" fill="#1a1a1a">offsets.in</text>
+<text x="210" y="216" font-size="16" text-anchor="middle" fill="#555">hypervisor/src/greatlakes/ontario/src/</text>
+<text x="206" y="276" font-size="16" font-weight="700" text-anchor="end" fill="#1a1a1a">1212 lines</text>
+<text x="206" y="276" font-size="16" text-anchor="start" fill="#555">, two kinds of line</text>
+<line x1="175" y1="290" x2="175" y2="398" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<text x="165" y="338" font-size="16" font-weight="700" text-anchor="end" fill="#1a1a1a">grep '^#'</text>
+<text x="165" y="358" font-size="16" font-weight="700" text-anchor="end" fill="#1a1a1a">32 lines</text>
+<text x="187" y="338" font-size="16" fill="#555">preprocessor directives</text>
+<text x="187" y="358" font-size="15" font-weight="700" font-style="italic" fill="#1a1a1a">e.g. #include &lt;vcpu.h&gt;</text>
+<rect x="980" y="190" width="300" height="232" rx="12" fill="#fff" stroke="#7b3f98" stroke-width="3"/>
+<text x="1130" y="181" font-size="15" text-anchor="middle" fill="#7b3f98">the list (a temporary file)</text>
+<text x="1130" y="228" font-size="24" font-weight="700" text-anchor="middle" fill="#1a1a1a">offsets.tmp</text>
+<text x="1130" y="262" font-size="17" text-anchor="middle" fill="#555">(every other line)</text>
+<line x1="360" y1="240" x2="978" y2="240" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<text x="670" y="228" font-size="17" text-anchor="middle" fill="#555"><tspan font-weight="700" fill="#1a1a1a">grep -v '^#'</tspan>, <tspan font-weight="700" fill="#1a1a1a">1180 lines</tspan></text>
+<text x="670" y="268" font-size="15" text-anchor="middle" fill="#555"><tspan font-weight="700" font-style="italic">struct, member, NAME, constants, etc.</tspan></text>
+<rect x="992" y="298" width="276" height="68" rx="8" fill="#f7f1fa" stroke="#7b3f98" stroke-width="1.5"/>
+<text x="1004" y="318" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a" xml:space="preserve">config      CONFIG_SIZE</text>
+<text x="1004" y="337" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a" xml:space="preserve">  memsize   CONFIG_MEMSIZE</text>
+<text x="1004" y="357" font-size="11" fill="#555">876 names in the list, 29 compiled out by #ifdef</text>
+<rect x="992" y="372" width="276" height="44" rx="8" fill="#fff4e0" stroke="#b9791f" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="1004" y="387" font-size="11" font-weight="700" font-style="italic" fill="#b9791f">definitions (count: 135), copied as is</text>
+<text x="1004" y="407" font-family="Menlo, Consolas, monospace" font-size="12" fill="#1a1a1a">\#define CPU_SCR0 (CPU_SCR + ...)</text>
+<rect x="384" y="284" width="465" height="104" rx="8" fill="#fbfbfb" stroke="#bbb" stroke-width="1.2"/>
+<text x="396.0" y="304" font-size="15" font-weight="700" fill="#1a1a1a" xml:space="preserve">Sun path</text>
+<text x="459.0" y="304" font-size="15" fill="#555" xml:space="preserve">, native on Solaris/SPARC:</text>
+<rect x="410.0" y="316" width="14" height="14" rx="2" fill="#eaf4fd" stroke="#5aa9e6" stroke-width="2"/>
+<text x="430.0" y="328" font-size="15" fill="#555" xml:space="preserve">Sun Studio 11–12.5</text>
+<rect x="575.0" y="316" width="14" height="14" rx="2" fill="#fdecec" stroke="#e57373" stroke-width="2"/>
+<text x="595.0" y="328" font-size="15" fill="#555" xml:space="preserve">Developer Studio 12.6</text>
+<text x="396.0" y="352" font-size="15" font-weight="700" fill="#1a1a1a" xml:space="preserve">GNU path</text>
+<text x="465.0" y="352" font-size="15" fill="#555" xml:space="preserve">, cross-compiled on Linux:</text>
+<rect x="647.0" y="340" width="14" height="14" rx="2" fill="#eaf6ea" stroke="#4caf50" stroke-width="2"/>
+<text x="667.0" y="352" font-size="15" fill="#555" xml:space="preserve">gcc 13–16 + binutils</text>
+<rect x="396.0" y="364" width="7" height="7" fill="#5aa9e6" fill-opacity="0.55"/>
+<rect x="403" y="364" width="7" height="7" fill="#e57373" fill-opacity="0.55"/>
+<rect x="396.0" y="371" width="14" height="7" fill="#4caf50" fill-opacity="0.55"/>
+<rect x="396.0" y="364" width="14" height="14" rx="2" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="416.0" y="376" font-size="15" fill="#555" xml:space="preserve">Sun on top, GNU below</text>
+<rect x="586.0" y="364" width="14" height="14" rx="2" fill="#fff" stroke="#8a5a00" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="606.0" y="376" font-size="15" fill="#555" xml:space="preserve">test-only check</text>
+<rect x="722.0" y="364" width="14" height="14" rx="2" fill="#f7f1fa" stroke="#7b3f98" stroke-width="2"/>
+<text x="742.0" y="376" font-size="15" fill="#555" xml:space="preserve">the list, shared</text>
+<g transform="translate(0,70)">
+<rect x="1325" y="120" width="275" height="650" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="1462" y="158" font-size="24" font-weight="700" text-anchor="middle" fill="#1a1a1a">offsets.{h,chk}</text>
+<text x="1340" y="192" font-size="19" font-weight="700" fill="#1a1a1a">explicit constants</text>
+<text x="1585" y="192" font-size="15" text-anchor="end" fill="#1a5fb4">(count: 848)</text>
+<text x="1340" y="212" font-size="14" fill="#555">name: list; value: struct layout (3a)</text>
+<rect x="1336" y="232" width="152" height="28" rx="6" fill="#f7f1fa" stroke="#7b3f98" stroke-width="1.5"/>
+<text x="1346" y="251" font-family="Menlo, Consolas, monospace" font-size="15" fill="#1a1a1a">CONFIG_SIZE</text>
+<clipPath id="expclipA"><rect x="1494" y="232" width="94" height="28" rx="6"/></clipPath>
+<g clip-path="url(#expclipA)">
+<rect x="1494" y="232" width="32" height="28" fill="#eaf4fd"/>
+<rect x="1526" y="232" width="31" height="28" fill="#fdecec"/>
+<rect x="1557" y="232" width="31" height="28" fill="#eaf6ea"/>
+</g>
+<rect x="1494" y="232" width="94" height="28" rx="6" fill="none" stroke="#888" stroke-width="1.5"/>
+<text x="1504" y="251" font-family="Menlo, Consolas, monospace" font-size="15" fill="#1a1a1a">0x540</text>
+<rect x="1336" y="264" width="152" height="28" rx="6" fill="#f7f1fa" stroke="#7b3f98" stroke-width="1.5"/>
+<text x="1346" y="283" font-family="Menlo, Consolas, monospace" font-size="15" fill="#1a1a1a">CONFIG_MEMSIZE</text>
+<clipPath id="expclipB"><rect x="1494" y="264" width="94" height="28" rx="6"/></clipPath>
+<g clip-path="url(#expclipB)">
+<rect x="1494" y="264" width="32" height="28" fill="#eaf4fd"/>
+<rect x="1526" y="264" width="31" height="28" fill="#fdecec"/>
+<rect x="1557" y="264" width="31" height="28" fill="#eaf6ea"/>
+</g>
+<rect x="1494" y="264" width="94" height="28" rx="6" fill="none" stroke="#888" stroke-width="1.5"/>
+<text x="1504" y="283" font-family="Menlo, Consolas, monospace" font-size="15" fill="#1a1a1a">0x8</text>
+<line x1="1340" y1="318" x2="1585" y2="318" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1340" y="348" font-size="19" font-weight="700" fill="#1a1a1a">implicit constants</text>
+<text x="1585" y="348" font-size="15" text-anchor="end" fill="#1a5fb4">(count: 178)</text>
+<text x="1340" y="368" font-size="14" fill="#555">name and value: struct layout (3a)</text>
+<clipPath id="impclip"><rect x="1336" y="380" width="252" height="152" rx="6"/></clipPath>
+<g clip-path="url(#impclip)">
+<rect x="1336" y="380" width="84" height="152" fill="#eaf4fd"/>
+<rect x="1420" y="380" width="84" height="152" fill="#fdecec"/>
+<rect x="1504" y="380" width="84" height="152" fill="#eaf6ea"/>
+</g>
+<rect x="1336" y="380" width="252" height="152" rx="6" fill="none" stroke="#888" stroke-width="1.5"/>
+<text x="1346" y="404" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a">HDNAME_ROOT</text>
+<text x="1580" y="404" font-family="Menlo, Consolas, monospace" font-size="14" text-anchor="end" fill="#1a1a1a">0x0</text>
+<text x="1346" y="423" font-size="12" fill="#555">(list: nametable, struct)</text>
+<text x="1346" y="452" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a">CPU_SCR_INCR</text>
+<text x="1580" y="452" font-family="Menlo, Consolas, monospace" font-size="14" text-anchor="end" fill="#1a1a1a">0x8</text>
+<text x="1346" y="471" font-size="12" fill="#555">(list: scr, array)</text>
+<text x="1346" y="500" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a">ENUM_HVctl_res_guest</text>
+<text x="1580" y="500" font-family="Menlo, Consolas, monospace" font-size="14" text-anchor="end" fill="#1a1a1a">0x0</text>
+<text x="1346" y="519" font-size="12" fill="#555">(list: hvctl_res_t, enum)</text>
+<line x1="1340" y1="548" x2="1585" y2="548" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1340" y="578" font-size="19" font-weight="700" fill="#1a1a1a">definitions</text>
+<text x="1585" y="578" font-size="15" text-anchor="end" fill="#1a5fb4">(count: 135)</text>
+<text x="1340" y="598" font-size="14" fill="#555">from the list, as is</text>
+<rect x="1336" y="610" width="252" height="40" rx="6" fill="#fff4e0" stroke="#b9791f" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="1346" y="635" font-family="Menlo, Consolas, monospace" font-size="14" fill="#1a1a1a">CPU_SCR0 (CPU_SCR + ...)</text>
+<text x="1340" y="690" font-size="17" font-weight="700" fill="#1a1a1a">Total</text>
+<text x="1585" y="690" font-size="17" font-weight="700" text-anchor="end" fill="#1a5fb4">count: 1161</text>
+<text x="1340" y="712" font-size="14" fill="#555">offsets.chk: made on all 3 routes;</text>
+<text x="1340" y="730" font-size="14" fill="#555">aschk checks it</text>
+<rect x="60" y="330" width="230" height="440" rx="12" fill="#fff" stroke="#999" stroke-width="2"/>
+<text x="175" y="372" font-size="17" text-anchor="middle" fill="#555">temporary</text>
+<text x="175" y="402" font-size="23" font-weight="700" text-anchor="middle" fill="#1a1a1a">offsets-n1.c</text>
+<text x="175" y="428" font-size="17" text-anchor="middle" fill="#555">stub</text>
+<rect x="72" y="496" width="206" height="116" rx="6" fill="#f2f2f2" stroke="#999" stroke-width="1.5"/>
+<text x="82" y="516" font-family="Menlo, Consolas, monospace" font-size="13" fill="#555">vcpu.h includes config.h:</text>
+<text x="82" y="538" font-family="Menlo, Consolas, monospace" font-size="13" fill="#1a1a1a">struct config {</text>
+<text x="82" y="558" font-family="Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1a1a1a">  uint64_t membase;</text>
+<text x="82" y="578" font-family="Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1a1a1a">  uint64_t memsize;</text>
+<text x="82" y="598" font-family="Menlo, Consolas, monospace" font-size="13" fill="#1a1a1a">  ...</text>
+<text x="175" y="458" font-size="15" text-anchor="middle" fill="#1a1a1a">pulling in hypervisor/</text>
+<text x="175" y="482" font-size="15" text-anchor="middle" fill="#1a1a1a">headers that define structs</text>
+<text x="175" y="702" font-size="17" text-anchor="middle" fill="#1a1a1a">the DWARF routes add</text>
+<text x="175" y="726" font-size="17" text-anchor="middle" fill="#1a1a1a">variables, so the compiler</text>
+<text x="175" y="750" font-size="17" text-anchor="middle" fill="#1a1a1a">describes every type</text>
+
+
+
+<text x="330" y="343" font-size="18" font-weight="700" fill="#1f6fb2">Sun Studio 11 to 12.5: original path</text>
+<rect x="330" y="362" width="300" height="70" rx="8" fill="#eaf4fd" stroke="#5aa9e6" stroke-width="2.5"/>
+<text x="480" y="406" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">cc -xdebugformat=stabs -g -S</text>
+<rect x="680" y="362" width="250" height="70" rx="8" fill="#eaf4fd" stroke="#5aa9e6" stroke-width="2.5"/>
+<text x="805" y="393" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">offsets-n1.s</text>
+<text x="805" y="420" font-size="16" text-anchor="middle" fill="#555">temporary: cc -S output, stabs</text>
+<rect x="980" y="362" width="300" height="70" rx="8" fill="#eaf4fd" stroke="#5aa9e6" stroke-width="2.5"/>
+<text x="1130" y="393" font-size="18" font-weight="700" text-anchor="middle" fill="#1a1a1a">stabs -t genassym</text>
+<text x="1130" y="420" font-size="16" text-anchor="middle" fill="#555">Sun's tool, built from its source</text>
+<line x1="290" y1="400" x2="328" y2="400" stroke="#5aa9e6" stroke-width="2.5" marker-end="url(#arb)"/>
+<line x1="630" y1="400" x2="678" y2="400" stroke="#5aa9e6" stroke-width="2.5" marker-end="url(#arb)"/>
+<path d="M930,400 L936,400 Q942,400 942,394 L942,393.5 Q942,387 948.5,387 L978,387" fill="none" stroke="#5aa9e6" stroke-width="2.5" marker-end="url(#arb)"/>
+<line x1="1280" y1="415" x2="1323" y2="415" stroke="#5aa9e6" stroke-width="2.5" marker-end="url(#arb)"/>
+<text x="330" y="453" font-size="18" font-weight="700" fill="#b83a3a">Developer Studio 12.6 <tspan font-size="15" font-weight="400" fill="#555">(hv-ds12-offsets-dwarf.patch)</tspan></text>
+<rect x="330" y="472" width="300" height="70" rx="8" fill="#fdecec" stroke="#e57373" stroke-width="2.5"/>
+<text x="480" y="503" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">cc -g</text>
+<text x="480" y="530" font-size="16" text-anchor="middle" fill="#555">DWARF is the only format left</text>
+<rect x="680" y="472" width="250" height="70" rx="8" fill="#fdecec" stroke="#e57373" stroke-width="2.5"/>
+<text x="805" y="503" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">offsets-n1.o (DWARF)</text>
+<text x="805" y="530" font-size="16" text-anchor="middle" fill="#555">dumped to offsets-n1.dump</text>
+<rect x="980" y="472" width="300" height="70" rx="8" fill="#fdecec" stroke="#e57373" stroke-width="2.5"/>
+<text x="1130" y="503" font-size="18" font-weight="700" text-anchor="middle" fill="#1a1a1a">dwarf2genassym.pl</text>
+<text x="1130" y="530" font-size="16" text-anchor="middle" fill="#555">reads dwarfdump</text>
+<line x1="290" y1="510" x2="328" y2="510" stroke="#e57373" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="630" y1="510" x2="678" y2="510" stroke="#e57373" stroke-width="2.5" marker-end="url(#arr)"/>
+<path d="M930,510 L936,510 Q942,510 942,504 L942,503.5 Q942,497 948.5,497 L978,497" fill="none" stroke="#e57373" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="1280" y1="525" x2="1323" y2="525" stroke="#e57373" stroke-width="2.5" marker-end="url(#arr)"/>
+<text x="330" y="563" font-size="18" font-weight="700" fill="#2e7d32">GNU (sparc64 cross gcc 13-16 and GNU binutils)</text>
+<rect x="330" y="582" width="300" height="70" rx="8" fill="#eaf6ea" stroke="#4caf50" stroke-width="2.5"/>
+<text x="480" y="613" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">gcc -gdwarf-4</text>
+<text x="480" y="640" font-size="16" text-anchor="middle" fill="#555">no -gstabs since GCC 13</text>
+<rect x="680" y="582" width="250" height="70" rx="8" fill="#eaf6ea" stroke="#4caf50" stroke-width="2.5"/>
+<text x="805" y="613" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">offsets-n1.o (DWARF)</text>
+<text x="805" y="640" font-size="16" text-anchor="middle" fill="#555">dumped to offsets-n1.dump</text>
+<rect x="980" y="582" width="300" height="70" rx="8" fill="#eaf6ea" stroke="#4caf50" stroke-width="2.5"/>
+<text x="1130" y="613" font-size="18" font-weight="700" text-anchor="middle" fill="#1a1a1a">dwarf2genassym.pl</text>
+<text x="1130" y="640" font-size="16" text-anchor="middle" fill="#555">reads readelf --debug-dump</text>
+<line x1="290" y1="620" x2="328" y2="620" stroke="#4caf50" stroke-width="2.5" marker-end="url(#arg)"/>
+<line x1="630" y1="620" x2="678" y2="620" stroke="#4caf50" stroke-width="2.5" marker-end="url(#arg)"/>
+<path d="M930,620 L936,620 Q942,620 942,614 L942,613.5 Q942,607 948.5,607 L978,607" fill="none" stroke="#4caf50" stroke-width="2.5" marker-end="url(#arg)"/>
+<line x1="1280" y1="635" x2="1323" y2="635" stroke="#4caf50" stroke-width="2.5" marker-end="url(#arg)"/>
+<text x="330" y="673" font-size="18" font-weight="700" fill="#8a5a00">Check, test only: compiler-evaluated genassym</text>
+<rect x="330" y="692" width="300" height="70" rx="8" fill="#fff" stroke="#8a5a00" stroke-width="2.5" stroke-dasharray="8 6"/>
+<text x="480" y="723" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">gcc evaluates</text>
+<text x="480" y="750" font-size="16" text-anchor="middle" fill="#555">offsetof and sizeof</text>
+<rect x="680" y="692" width="250" height="70" rx="8" fill="#fff" stroke="#8a5a00" stroke-width="2.5" stroke-dasharray="8 6"/>
+<text x="805" y="723" font-size="18" font-weight="400" text-anchor="middle" fill="#1a1a1a">inline-asm markers</text>
+<text x="805" y="750" font-size="16" text-anchor="middle" fill="#555">no debug info is read</text>
+<rect x="980" y="692" width="300" height="70" rx="8" fill="#fff" stroke="#8a5a00" stroke-width="2.5" stroke-dasharray="8 6"/>
+<text x="1130" y="723" font-size="18" font-weight="700" text-anchor="middle" fill="#1a1a1a">genoffsets.py</text>
+<text x="1130" y="750" font-size="16" text-anchor="middle" fill="#555">offsets.h only, compared in tests/</text>
+<line x1="290" y1="730" x2="328" y2="730" stroke="#8a5a00" stroke-width="2.5" marker-end="url(#ark)"/>
+<line x1="630" y1="730" x2="678" y2="730" stroke="#8a5a00" stroke-width="2.5" marker-end="url(#ark)"/>
+<line x1="930" y1="730" x2="978" y2="730" stroke="#8a5a00" stroke-width="2.5" marker-end="url(#ark)"/>
+<line x1="1280" y1="745" x2="1323" y2="745" stroke="#8a5a00" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#ark)"/>
+<text x="60" y="1308" font-size="16" fill="#777">Step numbers follow the dependencies, not the order the tools run.</text>
+</g>
+<path d="M1268,316 H1334" fill="none" stroke="#7b3f98" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#ap)"/>
+<path d="M1268,348 H1334" fill="none" stroke="#7b3f98" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#ap)"/>
+<path d="M980,395 L967,395 Q954,395 954,408 L954,703" fill="none" stroke="#7b3f98" stroke-width="2.5"/>
+<line x1="954" y1="483" x2="978" y2="483" stroke="#7b3f98" stroke-width="2.5" marker-end="url(#ap)"/>
+<line x1="954" y1="593" x2="978" y2="593" stroke="#7b3f98" stroke-width="2.5" marker-end="url(#ap)"/>
+<line x1="954" y1="703" x2="978" y2="703" stroke="#7b3f98" stroke-width="2.5" marker-end="url(#ap)"/>
+<path d="M1268,404 L1298,404 Q1312,404 1312,390 L1312,174 Q1312,160 1326,160 L1611,160 Q1625,160 1625,174 L1625,692.5 Q1625,705 1612.5,705 L1600,705" fill="none" stroke="#b9791f" stroke-width="2.5" marker-end="url(#am)"/>
+</g>
+<g transform="translate(0,-80)">
+<rect x="60" y="944" width="770" height="184" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="96" y="974" font-size="19" font-weight="700" fill="#1a1a1a">sparc64-linux-gnu-as / Sun as: preprocessing &amp; assembling</text>
+<path d="M1462,906 L1462,944 Q1462,958 1448,958 L830,958" fill="none" stroke="#1a1a1a" stroke-width="2.5" marker-end="url(#ab)"/>
+<rect x="60" y="1159" width="860" height="142" rx="10" fill="#fff" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="96" y="1186" font-size="19" font-weight="700" fill="#1a1a1a">cc / gcc: compiling</text>
+<g transform="translate(0,-95)">
+<g transform="translate(16,0)">
+<rect x="50" y="1095" width="370" height="50" fill="#eaf4fd"/>
+<rect x="420" y="1095" width="370" height="50" fill="#fdecec"/>
+<rect x="50" y="1095" width="740" height="50" rx="8" fill="none" stroke="#5aa9e6" stroke-width="2.5"/>
+<text x="420" y="1114" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: no separate step</text>
+<text x="420" y="1136" font-size="13" text-anchor="middle" fill="#333">/usr/ccs/bin/as -P runs cpp itself; -xarch=v9d -D_ASM (cpp inside)</text>
+<rect x="50" y="1163" width="230" height="50" rx="8" fill="#eaf6ea" stroke="#4caf50" stroke-width="2.5"/>
+<text x="170" y="1184" font-size="13" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: gcc -E -traditional-cpp</text>
+<text x="165" y="1203" font-size="13" text-anchor="middle" fill="#333">-D_ASM, then offsets.h included</text>
+<rect x="305" y="1163" width="230" height="50" rx="8" fill="#eaf6ea" stroke="#4caf50" stroke-width="2.5" stroke-dasharray="8 6"/>
+<text x="425" y="1184" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun as -&gt; GNU as fixup</text>
+<text x="420" y="1203" font-size="13" text-anchor="middle" fill="#555">(GNU only) sed rules, pushlocals.py</text>
+<rect x="560" y="1163" width="230" height="50" rx="8" fill="#eaf6ea" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="680" y="1184" font-size="13" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: sparc64-linux-gnu-as</text>
+<text x="675" y="1203" font-size="13" text-anchor="middle" fill="#333">-Av9d: *.s -> *.o</text>
+<rect x="630" y="1296" width="125" height="43" fill="#eaf4fd"/>
+<rect x="755" y="1296" width="125" height="43" fill="#fdecec"/>
+<rect x="630" y="1339" width="250" height="43" fill="#eaf6ea"/>
+<rect x="630" y="1296" width="250" height="86" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>
+<line x1="630" y1="1339" x2="880" y2="1339" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="755" y="1313" font-size="13" font-weight="700" text-anchor="middle" fill="#1f6fb2">Sun: cc -xarch=v9a -KPIC -xO3</text>
+<text x="755" y="1330" font-size="12" text-anchor="middle" fill="#333">-errwarn=%all (+ -xbuiltin=%none, 12.2+)</text>
+<text x="755" y="1356" font-size="13" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: gcc -c -m64 -mcpu=v9 -fPIC -O2</text>
+<text x="755" y="1373" font-size="12" text-anchor="middle" fill="#333">-ffreestanding: *.c -> *.o</text>
+<rect x="50" y="1296" width="125" height="43" fill="#eaf4fd"/>
+<rect x="175" y="1296" width="125" height="43" fill="#fdecec"/>
+<rect x="50" y="1339" width="250" height="43" fill="#eaf6ea"/>
+<rect x="50" y="1296" width="250" height="86" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="175" y="1337" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">*.c: C sources</text>
+<text x="175" y="1359" font-size="13" text-anchor="middle" fill="#333">common/src, greatlakes/ontario/src</text>
+</g>
+<g transform="translate(107,62)">
+<rect x="930" y="1135" width="135" height="85" fill="#eaf4fd"/>
+<rect x="1065" y="1135" width="135" height="85" fill="#fdecec"/>
+<rect x="930" y="1220" width="270" height="85" fill="#eaf6ea"/>
+<rect x="930" y="1135" width="270" height="170" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>
+<line x1="930" y1="1220" x2="1200" y2="1220" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="1065" y="1166" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun, both Studio families</text>
+<text x="1065" y="1188" font-size="14" text-anchor="middle" fill="#1a1a1a">/usr/ccs/bin/ld -M mapfile.q</text>
+<text x="1065" y="1208" font-size="14" text-anchor="middle" fill="#555">+ nocap.mapfile</text>
+<text x="1065" y="1256" font-size="15" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: sparc64-linux-gnu-ld -T q.ld</text>
+<text x="1065" y="1282" font-size="14" text-anchor="middle" fill="#555">all *.o + memcpy shim -&gt; q.elf</text>
+<rect x="1224" y="1135" width="85" height="85" fill="#eaf4fd"/>
+<rect x="1309" y="1135" width="85" height="85" fill="#fdecec"/>
+<rect x="1224" y="1220" width="170" height="85" fill="#eaf6ea"/>
+<rect x="1224" y="1135" width="170" height="170" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="1309" y="1190" font-size="18" font-weight="700" text-anchor="middle" fill="#1a1a1a">objcopy -O binary</text>
+<text x="1309" y="1245" font-size="12" text-anchor="middle" fill="#333">GNU binutils on both paths</text>
+<rect x="1418" y="1135" width="90" height="170" rx="8" fill="#fff9d6" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="1463" y="1228" font-size="22" font-weight="700" text-anchor="middle" fill="#1a1a1a">q.bin</text>
+<line x1="1200" y1="1220" x2="1222" y2="1220" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<line x1="1394" y1="1220" x2="1416" y2="1220" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+</g>
+<path d="M806,1120 C920,1120 930,1282 938,1282" fill="none" stroke="#555" stroke-width="2.5"/>
+<path d="M806,1188 C920,1188 930,1282 938,1282" fill="none" stroke="#555" stroke-width="2.5"/>
+<path d="M896,1339 C920,1339 930,1282 938,1282" fill="none" stroke="#555" stroke-width="2.5"/>
+<line x1="1006" y1="1282" x2="1035" y2="1282" stroke="#2e9e3c" stroke-width="2.5" marker-end="url(#argY)"/>
+<g transform="translate(16,0)">
+<line x1="280" y1="1188" x2="303" y2="1188" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<line x1="535" y1="1188" x2="558" y2="1188" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<line x1="300" y1="1339" x2="338" y2="1339" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="340" y="1296" width="125" height="43" fill="#eaf4fd"/>
+<rect x="465" y="1296" width="125" height="43" fill="#fdecec"/>
+<rect x="340" y="1339" width="250" height="43" fill="#eaf6ea"/>
+<rect x="340" y="1296" width="250" height="86" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-dasharray="8 6"/>
+<line x1="340" y1="1339" x2="590" y2="1339" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="465" y="1323" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: no source fixes</text>
+<text x="465" y="1357" font-size="13" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: hvcontrol.c (2 fixes)</text>
+<text x="465" y="1374" font-size="12" text-anchor="middle" fill="#333">+ shadow headers in override/</text>
+<line x1="590" y1="1339" x2="628" y2="1339" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+</g>
+</g>
+</g>
+<circle cx="60" cy="180" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="186.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">1</text>
+<circle cx="60" cy="390" r="15" fill="#fff" stroke="#777" stroke-width="2.2"/>
+<text x="60" y="396.2" font-size="17" font-weight="700" text-anchor="middle" fill="#555">2a</text>
+<circle cx="980" cy="180" r="15" fill="#fff" stroke="#7b3f98" stroke-width="2.2"/>
+<text x="980" y="186.2" font-size="17" font-weight="700" text-anchor="middle" fill="#7b3f98">2b</text>
+<circle cx="330" cy="422" r="13" fill="#fff" stroke="#1f6fb2" stroke-width="2.2"/>
+<text x="330" y="428.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1f6fb2">3</text>
+<circle cx="680" cy="422" r="15" fill="#fff" stroke="#1f6fb2" stroke-width="2.2"/>
+<text x="680" y="428.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1f6fb2">3a</text>
+<circle cx="980" cy="422" r="15" fill="#fff" stroke="#1f6fb2" stroke-width="2.2"/>
+<text x="980" y="428.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1f6fb2">3b</text>
+<circle cx="330" cy="532" r="13" fill="#fff" stroke="#b83a3a" stroke-width="2.2"/>
+<text x="330" y="538.2" font-size="17" font-weight="700" text-anchor="middle" fill="#b83a3a">3</text>
+<circle cx="680" cy="532" r="15" fill="#fff" stroke="#b83a3a" stroke-width="2.2"/>
+<text x="680" y="538.2" font-size="17" font-weight="700" text-anchor="middle" fill="#b83a3a">3a</text>
+<circle cx="980" cy="532" r="15" fill="#fff" stroke="#b83a3a" stroke-width="2.2"/>
+<text x="980" y="538.2" font-size="17" font-weight="700" text-anchor="middle" fill="#b83a3a">3b</text>
+<circle cx="330" cy="642" r="13" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="330" y="648.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">3</text>
+<circle cx="680" cy="642" r="15" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="680" y="648.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">3a</text>
+<circle cx="980" cy="642" r="15" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="980" y="648.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">3b</text>
+<circle cx="330" cy="752" r="13" fill="#fff" stroke="#8a5a00" stroke-width="2.2"/>
+<text x="330" y="758.2" font-size="17" font-weight="700" text-anchor="middle" fill="#8a5a00">3</text>
+<circle cx="680" cy="752" r="15" fill="#fff" stroke="#8a5a00" stroke-width="2.2"/>
+<text x="680" y="758.2" font-size="17" font-weight="700" text-anchor="middle" fill="#8a5a00">3a</text>
+<circle cx="980" cy="752" r="15" fill="#fff" stroke="#8a5a00" stroke-width="2.2"/>
+<text x="980" y="758.2" font-size="17" font-weight="700" text-anchor="middle" fill="#8a5a00">3b</text>
+<circle cx="1325" cy="180" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1325" y="186.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">4</text>
+<circle cx="60" cy="854" r="18" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="860.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.1</text>
+<circle cx="66" cy="920" r="21" fill="#fff" stroke="#1f6fb2" stroke-width="2.2"/>
+<text x="66" y="926.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1f6fb2">5.1a</text>
+<circle cx="66" cy="1121" r="21" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="66" y="1127.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.2a</text>
+<circle cx="356" cy="1121" r="21" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="356" y="1127.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.2b</text>
+<circle cx="646" cy="1121" r="21" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="646" y="1127.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.2c</text>
+<circle cx="1037" cy="1022" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1037" y="1028.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">6</text>
+<circle cx="1331" cy="1022" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1331" y="1028.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">7</text>
+<circle cx="1525" cy="1022" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1525" y="1028.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">8</text>
+<circle cx="60" cy="1079" r="18" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="1085.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.2</text>
+<circle cx="66" cy="988" r="21" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="66" y="994.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">5.1a</text>
+<circle cx="321" cy="988" r="21" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="321" y="994.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">5.1b</text>
+<circle cx="576" cy="988" r="21" fill="#fff" stroke="#2e7d32" stroke-width="2.2"/>
+<text x="576" y="994.2" font-size="17" font-weight="700" text-anchor="middle" fill="#2e7d32">5.1c</text>
+<path d="M1350,826 V935 Q1350,947 1338,947 H1302" fill="none" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<text x="1358" y="905" font-size="16" font-weight="700" fill="#1a1a1a">offsets.chk</text>
+<text x="1000" y="870" font-size="16" fill="#1a1a1a"><tspan font-weight="700">offsets.h</tspan>: <tspan font-weight="700" fill="#1a5fb4">1161</tspan> #defines</text>
+<path d="M830,933 H958" fill="none" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="960" y="911" width="340" height="72" rx="8" fill="#f2f2f2" stroke="#1a1a1a" stroke-width="2.5"/>
+<text x="1130" y="936" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">aschk</text>
+<text x="1130" y="956" font-size="13" text-anchor="middle" fill="#333">checks every *.s access against offsets.chk</text>
+<text x="1130" y="974" font-size="12" text-anchor="middle" fill="#555">the same tool on both paths, built from Sun's source</text>
+<circle cx="960" cy="911" r="18" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="960" y="917.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">5.3</text>
+<path d="M972,983 V1076" fill="none" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<polygon points="972,1077 1006,1107 972,1137 938,1107" fill="#e8101c" stroke="#8a0a12" stroke-width="2"/>
+<text x="972" y="1105" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">5.3</text>
+<text x="972" y="1119" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">ok?</text>
+<line x1="972" y1="1137" x2="972" y2="1168" stroke="#e8101c" stroke-width="2.5" marker-end="url(#arR)"/>
+<text x="1010" y="1099" font-size="14" font-weight="700" fill="#2e9e3c">Y</text>
+<text x="982" y="1156" font-size="14" font-weight="700" fill="#e8101c">N</text>
+<text x="982" y="1172" font-size="12" font-weight="700" fill="#e8101c">stop</text>
+<line x1="44" y1="1250" x2="1625" y2="1250" stroke="#999" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="60" y="1268" font-size="18" font-weight="700" fill="#1a1a1a">reset.bin <tspan font-weight="400" fill="#555">(the reset vector): built from reset.s</tspan></text>
+<rect x="60" y="1288" width="230" height="56" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="175" y="1312" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">reset.s</text>
+<text x="175" y="1332" font-size="12" text-anchor="middle" fill="#555">ontario/dumbreset/, 321 lines</text>
+<line x1="290" y1="1316" x2="328" y2="1316" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="330" y="1288" width="150" height="28" fill="#eaf4fd"/>
+<rect x="480" y="1288" width="150" height="28" fill="#fdecec"/>
+<rect x="330" y="1316" width="300" height="28" fill="#eaf6ea"/>
+<rect x="330" y="1288" width="300" height="56" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="330" y1="1316" x2="630" y2="1316" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="480" y="1307" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: as -P (cpp inside)</text>
+<text x="480" y="1335" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: gcc -c -x assembler-with-cpp</text>
+<line x1="630" y1="1316" x2="678" y2="1316" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="680" y="1288" width="125" height="28" fill="#eaf4fd"/>
+<rect x="805" y="1288" width="125" height="28" fill="#fdecec"/>
+<rect x="680" y="1316" width="250" height="28" fill="#eaf6ea"/>
+<rect x="680" y="1288" width="250" height="56" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<line x1="680" y1="1316" x2="930" y2="1316" stroke="#1a1a1a" stroke-width="1.2"/>
+<text x="805" y="1307" font-size="12" font-weight="700" text-anchor="middle" fill="#1a1a1a">Sun: ld -M mapfile + nocap.mapfile</text>
+<text x="805" y="1335" font-size="12" font-weight="700" text-anchor="middle" fill="#2e7d32">GNU: ld -T reset.ld</text>
+<line x1="930" y1="1316" x2="978" y2="1316" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="980" y="1288" width="95" height="28" fill="#eaf4fd"/>
+<rect x="1075" y="1288" width="95" height="28" fill="#fdecec"/>
+<rect x="980" y="1316" width="190" height="28" fill="#eaf6ea"/>
+<rect x="980" y="1288" width="190" height="56" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1075" y="1322" font-size="15" font-weight="700" text-anchor="middle" fill="#1a1a1a">objcopy -O binary</text>
+<line x1="1170" y1="1316" x2="1218" y2="1316" stroke="#555" stroke-width="2.5" marker-end="url(#ar)"/>
+<rect x="1220" y="1288" width="120" height="56" rx="8" fill="#fff9d6" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1280" y="1322" font-size="16" font-weight="700" text-anchor="middle" fill="#1a1a1a">reset.bin</text>
+<circle cx="60" cy="1288" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="60" y="1294.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">9</text>
+<circle cx="330" cy="1288" r="15" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="330" y="1294.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">10</text>
+<circle cx="680" cy="1288" r="15" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="680" y="1294.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">11</text>
+<circle cx="980" cy="1288" r="15" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="980" y="1294.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">12</text>
+<circle cx="1220" cy="1288" r="15" fill="#fff" stroke="#1a1a1a" stroke-width="2.2"/>
+<text x="1220" y="1294.2" font-size="17" font-weight="700" text-anchor="middle" fill="#1a1a1a">13</text>
+<text x="1132.5" y="96" font-size="15" fill="#555">(see</text>
+<circle cx="1177.5" cy="91" r="11" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+<text x="1177.5" y="96" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">1</text>
+<text x="1192.5" y="96" font-size="15" fill="#555">–</text>
+<circle cx="1215.5" cy="91" r="11" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+<text x="1215.5" y="96" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">8</text>
+<text x="1228.5" y="96" font-size="15" fill="#555">)</text>
+<text x="1329.5" y="96" font-size="15" fill="#555">(see</text>
+<circle cx="1374.5" cy="91" r="11" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+<text x="1374.5" y="96" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">9</text>
+<text x="1389.5" y="96" font-size="15" fill="#555">–</text>
+<circle cx="1414.5" cy="91" r="13" fill="#fff" stroke="#1a1a1a" stroke-width="2"/>
+<text x="1414.5" y="96" font-size="14" font-weight="700" text-anchor="middle" fill="#1a1a1a">13</text>
+<text x="1429.5" y="96" font-size="15" fill="#555">)</text>
+</svg>

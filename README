@@ -133,7 +133,8 @@ Hypervisor and reset vector: q.bin, reset.bin
 ---------------------------------------------
 The hypervisor (q.bin) and its reset vectors (reset.bin) are written mostly in
 SPARC assembler, using the hyperprivileged registers and instructions of
-SPARC V9d. How they are built: build/hv_reset/README.
+SPARC V9d. How they are built: build/hv_reset/README, and the diagram
+docs/hv-build-flow.png.
 
     make hv_reset                    # $OUTDIR/{q.bin,reset.bin}
 
@@ -142,7 +143,7 @@ Compile options: build/hv_reset/README.options.
 
 OpenBoot PROM: openboot.bin
 ---------------------------
-openboot.bin is built by a Forth bootstrap (see diagram docs/obp-chain.png).
+openboot.bin is built by a Forth bootstrap (see diagram docs/obp-build-flow.png).
 It starts from one original binary of Sun's archive,
 ./src/obp/obp/os/sun/sparc/forth.dic; every other dictionary is built from
 source. Both toolchain paths run the same chain, but the gnu path runs it under
