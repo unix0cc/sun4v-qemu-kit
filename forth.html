@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forth-on-SPARC that builds itself</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="hv.html" title="Building the hypervisor blind">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <a href="hv.html" title="Building the hypervisor blind">2</a> <b>3</b> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">next &rsaquo;</a></span></p>
+<h1>Forth-on-SPARC that builds itself: a five-step bootstrap chain</h1>
+      <p style="text-indent:1.5em">OpenBoot is written in the Forth language and relies heavily on its <a href="https://www.forth.com/starting-forth/1-forth-stacks-dictionary/">dictionaries</a>.
+      Two kinds of file take part:</p>
+      <ul>
+        <li>a <b>dictionary</b> (<code>.dic</code>): a whole Forth system, as SPARC machine code;</li>
+        <li>the Forth <b>engine</b>, a C program (built from <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/obp/os/unix/wrapper.c"><code>wrapper.c</code></a> and <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/obp/os/unix/fsys.c"><code>fsys.c</code></a>).</li>
+      </ul>
+      <p style="text-indent:1.5em">Unlike a classical Forth interpreter, the engine has a different purpose: to load a dictionary and jump into it.
+      Once loaded, the dictionary is the running Forth: it can read source files and write a new dictionary.</p>
+      <p style="text-indent:1.5em">The <b>kernel</b>, the lowest layer of a Forth system, appears this way: a metacompiler (Forth code itself, <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/obp/obp/fm/meta"><code>fm/meta</code></a>)
+      compiles the kernel sources (<a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/obp/obp/fm/kernel"><code>fm/kernel</code></a>) for the chosen target and saves the result as a new dictionary.</p>
+      <p style="text-indent:1.5em">The seed dictionary is <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/obp/os/sun/sparc/forth.dic"><code>forth.dic</code></a>, a 32-bit SPARC image that ships with the source as a binary, with no source of its own.</p>
+<pre>forth.dic ─▶ kernel-xref.dic ─▶ forth32-xref.dic ─▶ k32t32-xref.dic ─┐
+ shipped      32-bit kernel      host dictionary     the same kernel,│
+ root                                                built again     │
+┌────────────────────────────────────────────────────────────────────┘
+└▶ f32t32.dic ─┬▶ k64t32.dic
+   host        │  64-bit kernel
+   dictionary  └▶ tokenize.dic
+                  FCode tokenizer</pre>
+      <p>The whole flow is in the <a href="obp-build-flow.svg">OBP build flow diagram</a>.</p>
+      <p>A Forth is built by a Forth, so a chain like this has to start somewhere, and in Sun's original chain that start is <code>forth.dic</code>.</p>
+      <p style="text-indent:1.5em">The way to trust such a start is to make the result rebuild itself: the first kernel (<code>kernel-xref.dic</code>) is made by the shipped dictionary,
+      the second (<code>k32t32-xref.dic</code>) by a Forth that grew from the first, and the two come out <b><i>identical</i></b>, byte for byte.</p>
+      <p style="text-indent:1.5em">Sun's makefile, written about 20 years ago (prudently?), already allows for this: the second kernel may replace <code>forth.dic</code>.
+      The GNU path (<code>TOOLCHAIN=gnu</code>) turns it into a check and stops if the two differ.</p>
+      <p style="text-indent:1.5em">The other six dictionaries of the chain are kept in <code>src/obp</code> as well. Each of them is made again on every build, and only <code>forth.dic</code> is read as a seed.
+      They are in the kit to check the GNU path (<code>TOOLCHAIN=gnu</code>): what it builds is compared with Sun's copies.</p>
+      <p style="text-indent:1.5em">The engine is built twice: a 32-bit one runs the 32-bit steps, a 64-bit one the rest, including the stand-alone <code>bootprom</code> and the reset code.</p>
+      <p style="text-indent:1.5em">The <b>tokenizer</b> (<code>tokenize.dic</code>) is a Forth compiled with Sun's default compiler, the 32-bit <code>f32t32.dic</code>, alongside the 64-bit kernel.</p>
+      <p style="text-indent:1.5em">Once the dictionaries are ready, it takes the device-driver sources (<code>*.tok</code> files, also written in Forth, spread across
+      <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/obp/obp"><code>src/obp/obp</code></a>) and turns them into FCode.
+      If you have read this far, you most likely know what FCode is. If not: FCode is the compact, platform-independent bytecode in which Open Firmware
+      (<a href="https://standards.ieee.org/ieee/1275/1932/">IEEE 1275</a>) carries drivers: the same driver runs on the Forth kernel of whichever platform loads it, even across architectures
+      (<a href="https://web.archive.org/web/20070611170250/http://www.firmworks.com/www/plug-in.htm">FirmWorks, Plug-In Drivers</a>).</p>
+      <p>That is what the platform-dependent Forth kernel, the one this chain builds, is for.</p>
+      <p>For example, the IDE driver <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/obp/dev/ide/pci/ide.tok"><code>ide.tok</code></a>
+      pulls in a dozen <code>.fth</code> files and ends up as a dropin named <code>class010100</code>, the PCI class code of an IDE controller:</p>
+<pre>ide.tok, ata/disk.fth, atapi/cdrom.fth, ... (12 .fth in all) ─tokenize.dic─┐
+┌──────────────────────────────────────────────────────────────────────────┘
+└▶ ide.fc (FCode) ─makedi─▶ dropin "class010100" ─▶ builtin.di ─▶ openboot.bin</pre>
+      <p style="text-indent:1.5em"><a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/tools/makedi.c"><code>makedi</code></a> wraps every FCode image into a <b>dropin</b>, and <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/tools/makeprom.c"><code>makeprom</code></a> packs the dropins, together with <code>bootprom</code> and the reset code, into <code>openboot.bin</code>.</p>
+      <p style="text-indent:1.5em">A dictionary is SPARC machine code, so on a non-SPARC host (the kit has been built on x86_64 and aarch64) the GNU path runs the engine (<code>forth32</code> under <code>qemu-sparc32plus</code>, <code>forth64</code> under <code>qemu-sparc64</code>),
+      and <code>makedi</code> and <code>makeprom</code> run under <code>qemu-user</code> too; the rest of the build is native.</p>
+      <p id="experimental">The kit also has an experimental entry point that does without <code>forth.dic</code>, based on
+      <a href="https://github.com/MitchBradley/cforth">Mitch Bradley's cforth</a>; many files of the OpenBoot Forth source
+      also carry copyright lines of Bradley Forthware, his company, next to Sun's (for example
+      <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/obp/obp/fm/meta/compilin.fth"><code>compilin.fth</code></a>
+      of the metacompiler).</p>
+
+<h2>Why the PCI guest grew in parallel: building a platform to build its own firmware</h2>
+      <p style="text-indent:1.5em">The seed <code>forth.dic</code> and the engine are SPARC code, and a native build of OpenBoot with Sun's tools needs a Solaris with a disk and a network.
+      The emulated niagara machine had neither, so for more than a month the work on the chain went hand in hand with a PCI prototype of the machine, each needing the other for testing.
+      Fortunately, the OBP image from the T2 archive (<code>niagara2/release/openboot.bin</code>) was usable as it was: it already contained the <code>vpci</code> dropin.</p>
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="hv.html" title="Building the hypervisor blind">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <a href="hv.html" title="Building the hypervisor blind">2</a> <b>3</b> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">next &rsaquo;</a></span></p>
+
+</main>
+</body>
+</html>

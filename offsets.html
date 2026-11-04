@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building offsets.h without Sun's compiler</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<p><a href="hv.html">&larr; Building the hypervisor blind</a></p>
+<h1>Building <code>offsets.h</code> without Sun's compiler</h1>
+            <p>Paradoxically, the hypervisor for the T2 platform, <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/huron"><code>huron</code></a>, was
+            built first from the OpenSPARC T2 archive, retracing Sun's steps for it before repeating them for the real
+            target, T1, <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/ontario"><code>ontario</code></a>.</p>
+            <p>Why?<br>
+            Sun left a finished <code>huron</code> build with <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/greatlakes/huron/legion/offsets.h"><code>offsets.h</code></a> and
+            <b><code>q</code></b>, the unstripped ELF version behind <b><code>q.bin</code></b>, with the names of functions and
+            variables still in it.<br>
+            It was a rare piece of luck: for <code>ontario</code> there is only the flat <code>q.bin</code>.<br>
+            So the method was worked out on a hypervisor that nobody needs here.</p>
+            <p>The hardest part was producing a correct <code>offsets.h</code> for the assembler. The hv's assembly code reads C structures by fixed
+            offsets and sizes (e.g. <code>CONFIG_MEMSIZE</code>, <code>CONFIG_SIZE</code>, <code>CPU_SCR_INCR</code>). These numbers are not written by hand: <code>offsets.h</code> is generated at build time.
+            Sun's procedure uses its own tool in C, <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/support/stabs"><code>stabs</code></a>, which extracts them from the debug records of the Sun compiler
+             (<b><code>cc -xdebugformat=stabs</code></b>; the blue <a href="hv-build-flow.svg">route in the diagram</a>).</p>
+            <p>For the first two lines of <code>struct config</code> it fills in the parameters in <code>offsets.h</code>, i.e.:</p>
+<pre># offsets.in: the input
+config      CONFIG_SIZE
+  memsize   CONFIG_MEMSIZE
+
+# offsets.h: Sun's stabs output, for huron
+#define CONFIG_SIZE 0x570
+#define CONFIG_MEMSIZE 0x8</pre>
+            <p>However, gcc has not supported <code>-gstabs</code> since <a href="https://gcc.gnu.org/gcc-13/changes.html">v13</a>.
+            It does emit DWARF, but at the time a DWARF reader would have been more work.</p>
+            <p>So another way was needed.</p>
+            <p>It helped that the <a href="https://sparc.org/wp-content/uploads/2014/01/SCD.2.4.1.pdf.gz">SPARC V9 ABI</a> (p. 38) fixes
+            a structure's layout, so gcc and Sun cc should lay out structures alike. That was taken as an assumption.
+            If so, gcc can answer instead of Sun cc: <code>sizeof</code> and <code>offsetof</code> give the same numbers.</p>
+            <p><a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/tests/full/hv_reset/lib/genoffsets.py"><code>genoffsets.py</code></a> does exactly that (the fourth <a href="hv-build-flow.svg">route in the diagram</a>). The first hv builds used it; now it is an independent test path.</p>
+            <p>The tool reads the same <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/greatlakes/huron/src/offsets.in"><code>offsets.in</code></a> and writes from it a small C file with
+            one question per constant name (<code>CONFIG_SIZE</code>, <code>CONFIG_MEMSIZE</code>, &hellip;):<br>
+            "how big is <code>struct config</code>, and where in it does the member <code>memsize</code> sit?"<br>
+            The questions are
+            <code>sizeof</code> and <code>offsetof</code>, wrapped in an inline-asm constant. For the same two lines, generated on the GNU path:</p>
+<pre># genassym.c: written by genoffsets.py (GNU route)
+GENASSYM(CONFIG_SIZE, sizeof (struct config));
+GENASSYM(CONFIG_MEMSIZE, __builtin_offsetof(struct config, memsize));
+
+# genassym.s: gcc -S output, each answer is a plain text line
+@@genassym@@ CONFIG_SIZE 1392
+@@genassym@@ CONFIG_MEMSIZE 8
+
+# offsets.h: collected by genoffsets.py from those lines
+#define CONFIG_SIZE 0x570
+#define CONFIG_MEMSIZE 0x8</pre>
+            <p>These are the same values as in Sun's <code>offsets.h</code> above.</p>
+            <p>The numbers come from the very compiler that builds the
+            rest of the hypervisor, so they cannot disagree with it. And since no debug records are read, the tool does not depend on any debug format.</p>
+            <p>And that turned out to be true: all 1114 numbers that <code>sparc64-linux-gnu-gcc -S</code> answered matched
+            Sun's own <code>offsets.h</code> for <code>huron</code>.</p>
+            <p>The unstripped
+            <code>q</code> gives a second, independent check: the size of a variable is its <code>sizeof</code> as the Sun
+            compiler laid it out, padding included. Had the two compilers padded this structure differently, the sizes would not
+            match. The global variable <code>config</code> is an instance of <code>struct config</code>, so the size
+            <code>nm</code> shows is its <code>sizeof</code>:</p>
+<pre>$ sparc64-linux-gnu-nm -S q | grep ' config$'
+000000fff041da80 0000000000000570 B config</pre>
+            <p>That is 0x570, exactly the <code>CONFIG_SIZE</code> that gcc computed.</p>
+            <p>That is not enough: a wrong number passes silently through assembling, linking and even running. So every
+            function of the new build was also compared with Sun's build of the same function. At this scale (654 functions,
+            in the output of two different compilers) that is tedious for a human, so it was left to an AI agent:</p>
+            <ol>
+              <li><code>sparc64-linux-gnu-nm -S</code> on the <code>huron</code> ELF <code>q</code> file, which kept its
+                  symbols, lists the functions with their addresses and sizes.</li>
+              <li><code>sparc64-linux-gnu-objdump -d</code> disassembles each function's address range in Sun's original
+                  <code>q</code> and the same function in the new object file.</li>
+              <li><code>sed</code> strips what cannot match: addresses, encoded bytes, comments and branch targets (the
+                  new objects are not linked yet).</li>
+              <li>What is left is compared line by line: <code>SAME</code> or <code>DIFF</code> for each function.</li>
+            </ol>
+            <p>For example, <code>start_master</code> in <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/greatlakes/huron/src/main.s#L259"><code>main.s</code></a> keeps the memory base and
+            size in <code>config</code>:</p>
+<pre>    ...
+    sub     %g1, %g5, %g6     ! %g6 - global config
+
+    ! set global memory base/size
+    stx     %i0, [%g6 + CONFIG_MEMBASE]
+    stx     %i1, [%g6 + CONFIG_MEMSIZE]
+    stx     %i3, [%g6 + CONFIG_STRAND_STARTSET]
+    stx     %i4, [%g6 + CONFIG_PHYSMEMSIZE]</pre>
+            <p>Sun's compiled <code>q</code> holds the same stores with the offsets filled in:</p>
+<pre>$ sparc64-linux-gnu-objdump -d q | grep -B1 -A2 'stx  %i1, \[ %g6 + 8 \]'
+  fff00094c8:  f0 71 a0 00  stx  %i0, [ %g6 ]
+  fff00094cc:  f2 71 a0 08  stx  %i1, [ %g6 + 8 ]
+  fff00094d0:  f6 71 a0 80  stx  %i3, [ %g6 + 0x80 ]
+  fff00094d4:  f8 71 a5 20  stx  %i4, [ %g6 + 0x520 ]</pre>
+            <p><code>CONFIG_MEMSIZE</code> is 8, as gcc said.</p>
+            <p>Of the functions compared, 377 came out identical. 112 differ, and none of them points to a wrong structure
+            offset: they use other instructions for the same value, have placeholders for addresses in objects that are
+            not linked yet, or are C code from a different compiler. Another 165, mostly C functions, differ in size and
+            were not compared line by line.</p>
+            <p>For example, in <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/common/src/hcall_core.s#L492"><code>hcall_tod_set</code></a>
+            the constants <code>ENUM_HVctl_res_guest</code>, <code>HVCTL_RES_STATUS_RES</code> and <code>GUEST_GID</code> are all 0.
+            gcc assembles the first line as <code>clr</code>, Sun's cc as <code>sethi %hi(0)</code>; the register ends up zero either way:</p>
+<table class="cmp">
+<tr><th>source (hcall_core.s)</th><th>gcc</th><th>Sun's cc</th></tr>
+<tr class="diff"><td><code>set     ENUM_HVctl_res_guest, %g5</code></td><td><code>clr     %g5</code></td><td><code>sethi   %hi(0), %g5</code></td></tr>
+<tr><td><code>stuw    %g5, [%g3 + HVCTL_RES_STATUS_RES]</code></td><td><code>st      %g5, [%g3]</code></td><td><code>st      %g5, [%g3]</code></td></tr>
+<tr><td><code>ldx     [%g6 + GUEST_GID], %g5</code></td><td><code>ldx     [%g6], %g5</code></td><td><code>ldx     [%g6], %g5</code></td></tr>
+</table>
+
+<p><a href="hv.html">&larr; Building the hypervisor blind</a></p>
+
+</main>
+</body>
+</html>

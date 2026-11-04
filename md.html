@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Machine descriptions</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><span style="opacity:.4">&lsaquo; previous</span> <b>1</b> <a href="hv.html" title="Building the hypervisor blind">2</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="hv.html" title="Building the hypervisor blind">next &rsaquo;</a></span></p>
+<h1>The machine descriptions: <code>1up-hv.bin</code> and <code>1up-md.bin</code></h1>
+      <p style="text-indent:1.5em">Each Machine Description (MD) is a binary directed acyclic graph (DAG), described by Sun in 2005 (<a href="https://sun4v.github.io/ARChive/FWARC/2005/115/final.materials/md-info.pdf">FWARC 2005/115</a>): a simple guest can find what it needs, such as the number of CPUs, by walking the list of nodes, without following the graph.</p>
+      <p style="text-indent:1.5em">Little has been published about working with it. A Solaris guest reads only its own domain's MD; the guest MDs are
+      built by the LDoms Manager from the platform description supplied by the firmware, and the user
+      <a href="https://docs.oracle.com/cd/E23120_01/html/821-2855/ldm-1m.html">configures domains</a>, never the MD itself.</p>
+      <p style="text-indent:1.5em">So in practice the MD is a black box, and opening it is where this project started.</p>
+      <p style="text-indent:1.5em">The first three weeks went to watching live kernels under a debugger, Solaris kmdb, to see how
+      different OS releases consume the MD
+      (<a href="https://unix0.cc/2026/07/15/sun4v-machine-description-part-1/">#1</a>,
+      <a href="https://unix0.cc/2026/07/16/sun4v-machine-description-part-2/">#2</a>,
+      <a href="https://unix0.cc/2026/07/17/sun4v_snv134_boot_S10u8/">#3</a>).
+      That work became the <a href="https://unix0cc.github.io/md/">md</a> project.</p>
+      <p style="text-indent:1.5em">Sun's LDoms ecosystem was built on big-endian SPARC, and so were its MD tools,
+      <code>mdgen</code> (compiles an MD from text) and <code>mdlint</code> (checks the result). Making them independent of
+      byte order (tested on little-endian hosts, x86_64 and aarch64) exposed bugs, for example a byte-swap branch that tested the OS instead of the actual
+      endianness. Initially, the prototype kit <a href="https://github.com/unix0cc/mdbuild/">mdbuild</a> built MDs with them;
+      they are the first-generation versions, from the OpenSPARC T1 hypervisor release.</p>
+      <p id="formats" style="text-indent:1.5em">Looking at the OpenSPARC T2 MD configuration files showed that their format differs from the one in the
+      OpenSPARC T1 archive and is much richer: the T1 hypervisor MD is a small graph of three nodes, while T2 MDs have
+      dozens.</p>
+      <p style="text-indent:1.5em">Several of those nodes, the <code>cpus</code> and <code>memory</code> containers and the cache hierarchy,
+      are what the kernel debugging above had shown to be missing, and what mdbuild had been adding to the T1 MDs by hand.</p>
+      <p style="text-indent:1.5em">The hypervisor from the T1 archive, which works with QEMU,
+      does not accept these MDs. So the next step was to read the hypervisor source in the OpenSPARC T2 archive. There
+      came a surprise: it still builds the <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/ontario"><code>ontario</code></a>
+      platform, which is a T1.</p>
+      <p style="text-indent:1.5em">So the OpenSPARC T2 archive could give a hypervisor for the T1 machine QEMU emulates.</p>
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><span style="opacity:.4">&lsaquo; previous</span> <b>1</b> <a href="hv.html" title="Building the hypervisor blind">2</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="hv.html" title="Building the hypervisor blind">next &rsaquo;</a></span></p>
+
+</main>
+</body>
+</html>

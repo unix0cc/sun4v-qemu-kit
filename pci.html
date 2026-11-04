@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A SPARC platform that builds its own firmware</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <a href="hv.html" title="Building the hypervisor blind">2</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <b>4</b> <span style="opacity:.4">next &rsaquo;</span></span></p>
+<h1>A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU</h1>
+<p style="text-indent:1.5em">No SPARC hardware was available during the development of the kit, so it is built and tested with <code>TOOLCHAIN=sun</code>
+on the QEMU-emulated Niagara machine itself, alongside <code>TOOLCHAIN=gnu</code> on Linux.</p>
+
+<p style="text-indent:1.5em">The OpenBoot image from the T2 archive (<code>niagara2/release/openboot.bin</code>) already contained the <code>vpci</code> dropin, which made it possible to bring up PCI on this T1 platform initially, more than a month before OpenBoot could be rebuilt from scratch.</p>
+
+<p style="text-indent:1.5em">A native Solaris build needs I/O, hence QEMU patches for devices under the root complex.
+The patches and the kit grew together and each is needed to test the other: the kit's <code>pci</code> configuration (<code>TARGET=pci</code>) needs the patched QEMU, and the patches need firmware from the kit's sources.</p>
+
+<p style="text-indent:1.5em">In the Solaris 10 guest, <code>TOOLCHAIN=sun</code> builds <code>TARGET=legion</code> (the default, a machine without PCI) with each of eight Sun compiler environments, <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/build_matrix#L55"><code>cc</code> 5.8 to 5.15</a>
+(see <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/REQUIREMENTS.SOLARIS"><code>REQUIREMENTS.SOLARIS</code></a>
+and <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/build_matrix"><code>build_matrix</code></a>).
+Every one of these builds, booted on the Linux host, reaches a Solaris login, which shows that the guest works as a build environment
+(<code>TOOLCHAIN=gnu</code>, built on Linux with <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/build_matrix#L109">gcc 13 to 16</a>, reaches the same login as well).</p>
+
+<p style="text-indent:1.5em">At the moment only the first <a href="https://github.com/unix0cc/qemu-experimental-patches/blob/main/upstream/0002-target-sparc-implement-TTE-page-size-for-32M-256M-pages.patch">patch</a> of the series is under consideration
+(<a href="https://lists.nongnu.org/archive/html/qemu-devel/2026-10/msg04645.html">v2 thread on qemu-devel</a>):
+the maintainer would queue it, but QEMU's current policy does not accept AI-generated code, and the policy <a href="https://lists.nongnu.org/archive/html/qemu-devel/2026-10/msg06146.html">is being updated</a>, though not in time for the 11.2 release cycle.</p>
+
+<p style="text-indent:1.5em">The other patches the <code>pci</code> configuration needs are not published yet.</p>
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <a href="hv.html" title="Building the hypervisor blind">2</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <b>4</b> <span style="opacity:.4">next &rsaquo;</span></span></p>
+
+</main>
+</body>
+</html>

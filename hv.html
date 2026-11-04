@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building the hypervisor blind</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ol > li { margin:0 0 1.4rem; }
+  ol > li > p { margin:.8rem 0; }
+  ol > li > p:first-of-type { text-indent:1.5em; }
+  ol > li > p:last-of-type { text-indent:1.5em; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <b>2</b> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">next &rsaquo;</a></span></p>
+<h1>Building the hypervisor blind</h1>
+      <p style="text-indent:1.5em">In the OpenSPARC T2 archive the hypervisor (hv) is one source tree for all platforms: shared code in
+      <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/common"><code>greatlakes/common</code></a>, with the T1 (<a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/ontario"><code>ontario</code></a>) and T2 (<a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/huron"><code>huron</code></a>) parts beside it.
+      <code>ontario/t1_fpga</code> is one build variant of it, a Makefile with the options for OpenSPARC T1 on
+      <a href="https://www.youtube.com/watch?v=ZCX03bU8TSM">FPGA boards</a>, meant for Sun's own toolchain; the archive
+      also ships its prebuilt <code>q.bin</code>.</p>
+      <p style="text-indent:1.5em">Here the hv from that tree is
+      built with GNU tools and run on QEMU instead of an FPGA. At first there was no way to know the image was right except to
+      boot it: hence "blind".</p>
+      <p style="text-indent:1.5em">This is how it went, stage by stage.</p>
+      <ol>
+        <li><b>Dumb start: swap in Sun's prebuilt <code>ontario/t1_fpga/q.bin</code></b> for the hv from the T1 archive.
+            <p>The console stayed silent, but a QEMU trace showed signs of life: the hv spun waiting for the UART while
+            printing its very first start-up message, ironically
+            <span style="display:block;text-align:center"><b><code>PRINT("Alive and well ...\r\n")</code></b> in
+            <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/greatlakes/ontario/src/main.s#L290"><code>main.s</code></a></span>
+            This debug build writes to the FPGA's debug UART, which QEMU does not model.</p>
+            <p>Once that UART was
+            <a href="https://github.com/unix0cc/qemu-experimental-patches/blob/main/devel/0003-niagara-hvuart-console.patch">added</a>
+            to QEMU as a second serial port, the hv began to print its <a href="https://unix0cc.github.io/md-artefacts/hvuart-t2qbin__1-sun-reset.txt">start-up messages</a>. They showed that the hv was being handed wrong values early in boot:
+            the "strand start set" was an address, and the "total physical mem" was garbage.</p>
+            <p>Both come from the CPU reset code, so <code>reset.bin</code> had to be rebuilt.</p></li>
+        <li><b>Rebuild <code>reset.bin</code>.</b>
+            <p>Built with GCC, <code>reset.s</code> failed in just two ways: old-style (K&amp;R) token pasting in the <code>TRAP()</code> macro, fixed by
+            <code>-traditional-cpp</code>, and missing <code>.register</code> declarations, which the GNU assembler requires and a small wrapper adds.</p>
+            <p>The reset code <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/greatlakes/ontario/dumbreset/reset.s#L289">hands the hv a mask of strands to start</a>, <code>0xffffffff</code>: all (up to 32) strands of a T1.
+            QEMU has one, and Sun's <code>q.bin</code>, built with <code>-DT1_FPGA</code>, waited forever for the other 31. A small patch changed the mask to 1.</p>
+            <p>The result is tiny: <code>reset.bin</code> is 768 bytes and comes from
+            one file, <code>reset.s</code>.</p>
+            <p>This was a small success: the first SPARC binary built with GNU tools in this project.</p>
+            <p>The kit's own hv kept <code>-DT1_FPGA</code> at first. Much later it was dropped: without it the hv has no code that
+            waits for the other strands, so Sun's <code>reset.s</code> now runs unpatched.</p></li>
+        <li><b>Find what the hv wants from the MD.</b>
+            <p>The MD had long been the reason Solaris would not boot; now the same MDs, in <a href="md.html#formats">the T1 format</a>,
+            could not even get past the hypervisor.</p>
+            <p>With the new <code>reset.bin</code> the hv ran
+            through its start-up and <a href="https://unix0cc.github.io/md-artefacts/hvuart-t2qbin__2-rebuilt-reset.txt">stopped</a> while parsing the <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/common/src/reconf.c#L126"><code>content-version</code></a> of the hv MD.</p>
+            <p>Swapping in Sun's hv MD (<code>S10image/1c1t/legion-hv.md</code> from the T2
+            archive) made the hv accept it and <a href="https://unix0cc.github.io/md-artefacts/hvuart-t2qbin__3-rebuilt-reset-sun-hvmd.txt">stop</a> later, on the <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/src/hypervisor/src/common/src/reconf.c#L1526">version check</a> of the guest MD header (<code>1up-md.bin</code>).</p>
+            <p>After these two stops the MD was put aside: to see what the hv wanted from it, the hv itself had to be built first.</p></li>
+        <li><b>Build the hv itself without Sun's toolchain.</b>
+            <p>The hv's assembly code depends heavily on <code>offsets.h</code>, which gives the offset of each field inside the
+            hv's C structures and the size of each structure.</p>
+            <p>The file is not part of the source: the build generates it. Sun's build does it from the debug records of its own
+            compiler, and modern GCC can no longer write those records.</p>
+            <p>So the numbers had to come from somewhere else, in a way that could be trusted.</p>
+            <p>The answer was to ask gcc itself, and several independent checks against Sun's own build showed its answers were right.
+            <a href="offsets.html">The details are on a separate page.</a></p>
+            <p>Only then was the build turned to <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src/hypervisor/src/greatlakes/ontario"><code>ontario</code></a>, the T1.
+            It starts from Sun's <code>legion</code> variant, with a few options switched off for QEMU
+            (<a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/build/hv_reset/README.options"><code>README.options</code></a>).</p></li>
+        <li><b>When the hypervisor finally met its MD.</b>
+            <p>With the hv built from source, the work on the MD resumed. The hv MD was redone in the new format, starting from Sun's
+            own configurations in the T2 archive; every value was then set to what the hypervisor actually reads, and
+            <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/md/REFERENCE"><code>md/REFERENCE</code></a> lists each one
+            with the line of code that reads it. The guest MD was brought up to match.</p>
+            <p>The hv did say why it stopped, but not always truthfully: "Missing root node in HVMD" came from a valid MD, and the
+            fault was in the build. So the hv's own debug output was switched on, and the start-up code was followed from the
+            QEMU monitor: where it stopped was compared with the source, to work out what was really missing.</p>
+            <p>The new hv first started the unmodified <code>niagara/t1_fpga/openboot.bin</code> from the T2 archive, which still carries
+            the driver for the Legion simulator's disk (see <a href="forth.html">the Forth page</a>).</p>
+            <p>At each start it stopped on one property the guest MD still lacked
+            (<code>FATAL: Missing required property &hellip;</code>); each was added to the MD, until there was nothing left to name and
+            it reached the <code>ok</code> prompt.</p>
+            <p>Three warnings still appear at every start, before the OpenBoot banner:</p>
+<pre>WARNING: Unable to connect to Domain Service providers
+
+WARNING: Unable to get LDOM Variable Updates
+
+WARNING: Unable to update LDOM Variable</pre>
+            <p>They are expected: the guest is an LDoms domain, and there is no control domain at the other end for it to talk to.</p>
+        </li>
+        <li><b>On to Solaris 10.</b>
+            <p>Solaris 10 was next. Its kernel reads the MD more strictly than OpenBoot, and each panic showed what was still
+            missing (see the <a href="md.html">MD page</a>). In the end it reached its login prompt from the T1 archive's own
+            disk image, <code>S10image/disk.s10hw2</code>, on the newly built hv, with machine descriptions it accepts.
+            From then on, no firmware from the T1 archive was needed.</p></li>
+      </ol>
+      <p style="text-indent:1.5em">Everything so far had been child's play next to what came next: building OpenBoot.</p>
+
+<p class="nav" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1rem"><a href="index.html">&larr; sun4v-qemu-kit</a> <span style="display:flex;gap:.7rem"><a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">&lsaquo; previous</a> <a href="md.html" title="Unexplored format for 1up-hv.bin and 1up-md.bin">1</a> <b>2</b> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">3</a> <a href="pci.html" title="A SPARC platform that builds its own firmware: a PCIe-capable niagara machine in QEMU">4</a> <a href="forth.html" title="Forth-on-SPARC that builds itself: a five-step bootstrap chain">next &rsaquo;</a></span></p>
+
+</main>
+</body>
+</html>

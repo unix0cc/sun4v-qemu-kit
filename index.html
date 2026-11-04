@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sun4v-qemu-kit</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#555; --line:#d8d8d8; --accent:#1a5fb4; --box:#f5f5f5; --out:#3f7d5c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8e8e8; --muted:#a0a4ab; --line:#33373d; --accent:#7ab0ff; --box:#1d2026; --out:#8fc9a4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  .brand { display:flex; align-items:center; gap:1rem; margin:0 0 .3rem; }
+  .brand h1 { margin:0; }
+  .brand img { height:96px; width:auto; }
+  h2 { font-size:1.2rem; margin:2.2rem 0 .5rem; padding-top:1rem; border-top:1px solid var(--line); }
+  p, li { margin:.4rem 0; }
+  a { color:var(--accent); }
+  code { background:var(--box); padding:.05rem .3rem; border-radius:3px; font-size:.92em; }
+  .lead { font-size:1.15rem; color:var(--muted); }
+  code.out { color:var(--out); font-weight:500; }
+  table.cmp { border-collapse:collapse; margin:.6rem 0; font-size:.86em; }
+  table.cmp th, table.cmp td { text-align:left; padding:.15rem .8rem; }
+  table.cmp th { border-bottom:1px solid currentColor; }
+  table.cmp td code { white-space:pre; }
+  table.cmp tr.diff td { background:var(--box); }
+  pre { background:var(--box); padding:.6rem .8rem; border-radius:4px; overflow-x:auto; font-size:.86em; line-height:1.45; margin:.6rem 0; }
+  ul { padding-left:1.3rem; }
+  ul.plain { margin:.2rem 0 .6rem; }
+  footer { margin-top:3rem; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+
+<div class="brand"><img src="logo.svg" alt="" width="94" height="96"><h1>sun4v-qemu-kit</h1></div>
+<div class="lead">
+<p><a href="https://github.com/unix0cc/sun4v-qemu-kit"><b>sun4v-qemu-kit</b></a> is a complete firmware build kit for
+QEMU's emulated UltraSPARC T1 machine (<code>-M niagara</code>), based on files from the OpenSPARC Project.</p>
+<p>It builds all six files QEMU loads, in four parts:</p>
+<ul class="plain">
+  <li><b>OpenBoot PROM (OBP):</b> <code class="out">openboot.bin</code> (Sun's Forth-based <a href="https://en.wikipedia.org/wiki/Open_Firmware">Open Firmware</a>)</li>
+  <li><b>Hypervisor (hv):</b> <code class="out">q.bin</code> + <code class="out">reset.bin</code> (<a href="https://sun4v.github.io/downloads/Hypervisor-api-2.0b.pdf">the layer under sun4v-series LDoms</a>)</li>
+  <li><b>Machine descriptions (MD):</b> a set of <a href="https://sun4v.github.io/ARChive/FWARC/2005/115/final.materials/md-info.pdf">directed acyclic graphs</a>, compiled to binary
+    <ul class="plain">
+      <li><code class="out">1up-hv.bin</code> (the whole platform description, for hv)</li>
+      <li><code class="out">1up-md.bin</code> (the guest's description, for OBP and OS)</li>
+    </ul></li>
+  <li><b>Empty NVRAM stub:</b> <code class="out">nvram1</code></li>
+</ul>
+</div>
+
+<link rel="stylesheet" href="asciinema-player.css">
+<div id="demo" style="max-width:100%"></div>
+<p style="font-size:.85em;opacity:.75">Solaris 10 1/13, from the ISO to the installer, on QEMU master (11.1.50). Idle time is shortened.</p>
+<script src="asciinema-player.min.js"></script>
+<script>
+  AsciinemaPlayer.create('s10-installer-80.cast', document.getElementById('demo'),
+    {fit: 'width', idleTimeLimit: 1.5, loop: false, autoPlay: false, terminalFontSize: 'medium'});
+</script>
+
+<h2>Why</h2>
+<p style="text-indent:1.5em">QEMU's niagara machine <a href="https://www.qemu.org/docs/master/system/target-sparc64.html">loads</a> the firmware files listed above as opaque binaries, and the sets published so far were fixed,
+prebuilt blobs. Sun had published the source of all of them (OpenSPARC
+<a href="https://www.oracle.com/servers/technologies/opensparc-t1-page.html">T1</a> and
+<a href="https://www.oracle.com/servers/technologies/opensparc-t2-page.html">T2</a>, 2006&ndash;2009), and the
+design records survive as FWARC case files in <a href="https://sun4v.github.io/">the sun4v archive</a>.</p>
+<p style="text-indent:1.5em">What was missing was a way for QEMU users to build working firmware from it.</p>
+<h2>Challenges</h2>
+<ul style="list-style:none;padding-left:0">
+  <li><b><a href="md.html">Unexplored format</a> for <code>1up-hv.bin</code> and <code>1up-md.bin</code>.</b></li>
+  <li><b><a href="hv.html">Building the hypervisor blind.</a></b></li>
+  <li><b><a href="forth.html">Forth-on-SPARC that builds itself</a>: a five-step bootstrap chain.</b></li>
+  <li><b><a href="pci.html">A SPARC platform that builds its own firmware</a>: a PCIe-capable niagara machine in QEMU.</b></li>
+</ul>
+<h2>Build flows</h2>
+<ul>
+  <li><a href="obp-build-flow.svg">OpenBoot build flow</a>: <code>openboot.bin</code> is the result of a bootstrap chain of <a href="https://www.forth.com/starting-forth/1-forth-stacks-dictionary/">Forth dictionaries</a>, from 32-bit to 64-bit, built on the Sun and the GNU path.</li>
+  <li><a href="hv-build-flow.svg">OpenSPARC T1 hypervisor build flow</a>: <code>q.bin</code> + <code>reset.bin</code>, on the Sun and the GNU path. The four routes at the top <a href="offsets.html">make the same offsets.h</a>; the assembler cannot tell which was used.</li>
+</ul>
+
+<h2>What is shown</h2>
+<ul>
+  <li><b>The <a href="https://www.oracle.com/solaris/technologies/solaris10-latest-version.html">latest Solaris 10 for SPARC</a>, 1/13,
+      <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/README.S10U11">boots to its installer</a>
+      on QEMU's emulated sun4v machine with sun4v-qemu-kit firmware.</b></li>
+  <li><b>Builds.</b> Cross-builds on <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/REQUIREMENTS.LINUX">Linux</a> (or in <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/container/README">containers</a>), or native builds on <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/REQUIREMENTS.SOLARIS">Solaris</a>; see the <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/build_matrix">build matrix</a>.</li>
+  <li><b>A test suite</b> in <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/tests"><code>tests/</code></a>, which runs even on a stock QEMU.</li>
+  <li><b>Sun's source is untouched.</b> The build applies <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/patches">patches</a> to a copy of <code>src/</code>,
+      never to the files themselves.</li>
+</ul>
+
+<h2>Getting Started</h2>
+<p>You need <a href="https://www.qemu.org/">QEMU</a> as the distribution packages it, the kit's build requirements
+(<a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/REQUIREMENTS.LINUX"><code>REQUIREMENTS.LINUX</code></a> or
+<a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/REQUIREMENTS.SOLARIS"><code>REQUIREMENTS.SOLARIS</code></a>), and for the login test a
+Solaris 10 disk image: the <a href="https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2">T1 archive</a>
+from Oracle contains one (<code>S10image/disk.s10hw2</code>, see <a href="#credits">Credits</a>).
+The steps are in <a href="https://github.com/unix0cc/sun4v-qemu-kit/blob/v0.1/README.USAGE"><code>README.USAGE</code></a> in the repository.</p>
+
+<h2 id="limitations">Limitations</h2>
+<ul>
+  <li>Only the single-strand configuration is built and supported.</li>
+  <li>With more than 1024 MB of RAM the stock Solaris 10 1/13 DVD uses 256M pages, which stock QEMU does not decode correctly; that needs a <a href="https://github.com/unix0cc/qemu-experimental-patches/blob/main/upstream/0002-target-sparc-implement-TTE-page-size-for-32M-256M-pages.patch">QEMU patch</a>.</li>
+  <li>The <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/md/pci">pci</a> configuration runs only on a QEMU with experimental patches, not included in this kit; getting them into QEMU is currently held up by its AI policy (<a href="pci.html">details</a>).</li>
+</ul>
+
+<h2 id="credits">Credits</h2>
+<p>The kit is built on the work of others; the full list is in <code>CREDITS</code> in the repository.</p>
+<ul>
+  <li><b>The OpenSPARC Project (Sun Microsystems, now Oracle):</b> the OpenSPARC source releases,
+      <a href="https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT1_Arch.1.5.tar.bz2">T1 archive</a> and
+      <a href="https://download.oracle.com/technetwork/systems/opensparc/OpenSPARCT2_Arch.1.2.tar.bz2">T2 archive</a>
+      (the source of <a href="https://github.com/unix0cc/sun4v-qemu-kit/tree/v0.1/src"><code>src/</code></a> is the T2 one).</li>
+  <li><b>Artyom Tarasenko:</b> the niagara machine in QEMU
+      (<code>-M niagara</code>, <a href="https://gitlab.com/qemu-project/qemu/-/blob/master/hw/sparc64/niagara.c"><code>hw/sparc64/niagara.c</code></a>);
+      <a href="https://github.com/artyom-tarasenko/qemu-sun4v-md/tree/1GiB-experimental">qemu-sun4v-md</a>, a complete
+      1 GiB firmware set for it (tuned for Solaris Nevada build 77); <a href="https://github.com/artyom-tarasenko/hsimd">hsimd</a>,
+      Sun's Legion disk driver published as a repository.</li>
+  <li><b>The QEMU community:</b> without <a href="https://www.qemu.org/">QEMU</a> this project would not exist.</li>
+  <li><b>Mitch Bradley:</b> <a href="https://github.com/MitchBradley/cforth">cforth</a>, used by the experimental bootstrap path that does without the <a href="forth.html"><code>forth.dic</code></a> binary.</li>
+  <li><b>illumos:</b> <a href="https://github.com/illumos/illumos-gate">illumos-gate</a>.</li>
+  <li><b>Project Q:</b> <a href="https://sun4v.github.io/">the sun4v specifications archive</a>.</li>
+</ul>
+
+<footer>
+  <p>Repository: <a href="https://github.com/unix0cc/sun4v-qemu-kit">github.com/unix0cc/sun4v-qemu-kit</a>. Licences: Sun's source under its BSD-style grant, the machine
+  descriptions under GPL-2, the kit's own build layer under BSD-2-Clause; which file is under
+  which is in <code>LICENSE</code> and <code>LICENSE_SRC.MAP</code>.</p>
+  <p>This is an independent project: it is not affiliated with or endorsed by Oracle, Sun Microsystems or the QEMU project. Product and company names are trademarks of their owners.</p>
+</footer>
+
+</main>
+</body>
+</html>
