@@ -27,8 +27,8 @@ Where to read what
     CREDITS              whose work this is built on
 
 
-Built from the Sun/Oracle OpenSPARC T2 source release (the distribution
-also contains the code for OpenSPARC T1):
+Based on files from the OpenSPARC Project (Sun Microsystems, now Oracle): the
+T2 source release, which also contains the code for OpenSPARC T1:
 https://www.oracle.com/servers/technologies/opensparc-t2-page.html
 
 src/ holds its hypervisor/ and obp/ directories as Sun Microsystems / Oracle
@@ -37,6 +37,10 @@ removed, see PRISTINE-MANIFEST. The hypervisor is built for the T1 platform
 ontario (HV_PLATFORM) and OpenBoot for the T1 targets (OBP_PLATFORM).
 
 The build never modifies src/: it applies patches/ to a copy.
+
+This is an independent project: it is not affiliated with or endorsed by Oracle,
+Sun Microsystems or the QEMU project. Product and company names are trademarks
+of their owners.
 
 Only the single-strand configuration (1up-*.bin) is built and supported,
 because QEMU's niagara machine has one CPU.

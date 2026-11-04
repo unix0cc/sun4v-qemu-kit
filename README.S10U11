@@ -2,7 +2,8 @@ Booting Solaris 10 1/13 on legion
 =================================
 
 Oracle Solaris 10 1/13 (Update 11) boots on legion from the DVD image, on a
-stock QEMU with 1024 MB of RAM, up to the miniroot running from RAM.
+stock QEMU with 1024 MB of RAM, to the text installer: it reaches the Identify
+This System and Host Name prompts.
 1024 MB is required: with this image at 2048 MB Solaris starts to enable 256M
 pages, which a stock QEMU mishandles, and the OS hangs (see md/legion/README).
 The image is V36434-01.iso (SPARC DVD) from the Oracle E-Delivery website.
