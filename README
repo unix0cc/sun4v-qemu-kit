@@ -180,3 +180,11 @@ Several licenses apply, depending on the path; LICENSE has the full map.
 - Our own files: BSD-2-Clause (LICENSE.BSD-2-Clause).
 - Sun's hypervisor and OpenBoot code in src/: BSD+.
 - The machine descriptions derived from Sun's (in md/): GPL-2.0-only.
+
+AI
+--
+AI was used as a coding and analysis assistant throughout this project, while
+src/ remains the original OpenSPARC T2 code as published (PRISTINE-MANIFEST).
+The author sets the goals, directs the work and commits every change. What AI
+produced is checked by the test suite (tests/), by comparing builds byte for
+byte across hosts and toolchains, and by boot runs recorded in build_matrix.
