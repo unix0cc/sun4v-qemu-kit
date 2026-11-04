@@ -280,6 +280,9 @@ FIRMWARE := reset.bin q.bin openboot.bin nvram1 1up-md.bin 1up-hv.bin
 # as "no parallelism in this Makefile"; 4.4 limits it to `all`. Nothing in the build uses -jN anyway (the OBP chain is sequential,
 # the sun path's makes have no jobserver): -jN is accepted and has no effect.
 .NOTPARALLEL: all
+# OUTDIR as the user can type it: inside the checkout relative (a container sees /src, the host does not).
+_OUTDIR_HINT = $(patsubst $(CURDIR)/%,./%,$(OUTDIR))
+
 all: clean $(_TOOLCHAIN_RECORD) workdir hv_reset obp md nvram
 	@echo
 	@echo "firmware set in $(OUTDIR):"
@@ -301,10 +304,20 @@ all: clean $(_TOOLCHAIN_RECORD) workdir hv_reset obp md nvram
 	done; \
 	if [ -n "$$missing" ]; then echo; echo "incomplete:$$missing" >&2; exit 1; fi
 	@echo
-	@echo "boot with:  qemu-system-sparc64 -M niagara -L $(OUTDIR) -m $(MD_MEM) -nographic -serial mon:stdio"
+	@echo "build done: $(words $(FIRMWARE)) files in $(_OUTDIR_HINT)"
+	@echo "------------------------------------------------------------------------"
+	@echo "boot with:"
+	@echo "  qemu-system-sparc64 -M niagara -L $(_OUTDIR_HINT) -m $(MD_MEM) -nographic -serial mon:stdio"
 ifeq ($(MD_LEGION_IO),yes)
-	@echo "Solaris:    add -drive if=pflash,file=<disk.s10hw2>,format=raw  and type: boot disk  (README.USAGE)"
+	@echo
+	@echo "Solaris disk from the T1 archive (disk.s10hw2); at the ok prompt type \"boot disk\":"
+	@echo "  qemu-system-sparc64 -M niagara -L $(_OUTDIR_HINT) -m $(MD_MEM) -nographic -serial mon:stdio -drive if=pflash,file=<disk.s10hw2>,format=raw"
+	@echo
+	@echo "Solaris 10 1/13 DVD: ./configure --with-md-mem=1024, then see README.S10U11"
 endif
+	@echo
+	@echo "quit QEMU: Ctrl-a x"
+	@echo "------------------------------------------------------------------------"
 
 # ---------------------------------------------------------------------------
 # Installing a built set. Does not build: `all` cleans first and a full OBP build
