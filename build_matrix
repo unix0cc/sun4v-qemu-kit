@@ -74,6 +74,10 @@ Rootless podman, one container/Containerfile for all of them (container/README),
 a fresh clone per run (container/clean-room.sh), builds run by hand in the
 container's shell.
 
+Builds on x86_64, aarch64 (podman) and macOS on Apple Silicon (Docker) give
+the same six files, byte for byte, at commit 4c52760 (default configuration).
+Booting the output and make test-all were run on x86_64 only.
+
     image         gcc   linux-user emulator                   language flags
     ------------  ----  -----------------------------------   --------------
     Ubuntu 24.04  13    qemu-user-static                      default
@@ -99,7 +103,7 @@ What the images needed (each is in the repository):
   (build/hv_reset/README.dwarf).
 
 Not covered: make bootstrap-check (needs the host's binfmt_misc handlers),
-Debian forky, docker, the sun path.
+Debian forky, the sun path.
 
 
 4. gnu path, gcc 13 to 16 and binutils
