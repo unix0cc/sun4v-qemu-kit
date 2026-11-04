@@ -57,6 +57,7 @@ class Console:
 
 def norm(t, path=''):
     """The parts of the OpenBoot output that change with the commit or the run, not with the machine."""
+    t = re.sub(r'(4\.x\.build_122\+qemu)-[0-9A-Za-z._+]+', r'\1', t)               # a tagged commit (build/stamp.sh) appends the release: 4.x.build_122+qemu-0.1
     t = re.sub(r'\[ sun4v-qemu-kit [^\]]*\]', '[ sun4v-qemu-kit <stamp> ]', t)
     t = re.sub(r'(OBP \S+) \d{4}/\d\d/\d\d \d\d:\d\d', r'\1 <date>', t)          # /openprom version: the build time (commit date when the tree is clean)
     t = re.sub(r'created \d{4}/\d\d/\d\d \d\d:\d\d', 'created <date>', t)
